@@ -1,0 +1,4 @@
+F90=/opt/mpich/bin/mpif90
+FFLAGS = -c
+F90FLAGS = -ffree-form -O0 -g -fimplicit-none -fbounds-check -fbacktrace
+LINK= $(F90)  $(F90FLAGS)

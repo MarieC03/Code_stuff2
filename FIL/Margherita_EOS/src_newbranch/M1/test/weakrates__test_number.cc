@@ -1,0 +1,152 @@
+//
+//
+// Quick and dirty test to benchmark the inversion process
+// and check it for consistency. This file is anything but clean!
+//
+//  Copyright (C) 2021, Carlo Musolino
+//  Based on routines by Elias Roland Most
+//
+
+#include <array>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+
+// Let's have some debug output
+#define STANDALONE
+#define COLDTABLE_SETUP
+
+#define DEBUG
+#include "../FIL_M1_headers.h"
+#include "../../3D_Table/readtable.cc"
+#include "../M1.hh"
+
+void inline generate_logspace(const double start, const double finish, const int numpoints, std::vector<double>& out)
+{
+  out.clear();
+  double li = std::log10(start); double le = std::log10(finish); double delta = (le-li)/numpoints;
+  double x = li;
+  for(int i=0;i<numpoints;i++) {
+    out.push_back(std::pow(10,x));
+    x += delta;
+  }			   
+}
+
+template<int N>
+using FD=Fermi_Dirac<N>;
+
+template<int N, int M>
+using FDR=Fermi_Dirac_Ratio<N,M>;
+
+int main() {
+
+  //
+  using FG=Fugacities<double>;
+
+  std::cout << FDR<3,2>::get(0.) << std::endl ;
+  std::cout << std::setprecision(15);
+
+  // EOS
+  std::string table_name = std::string("/Users/carlomusolino/numrel/EOS_Tables/EOSs/DD2/Hempel_DD2EOS_rho234_temp180_ye60_version_1.1_20120817.h5");
+  //std::string("/zhome/academic/HLRS/xfp/xfpmusol/EOS_Tables/DD2/Hempel_DD2EOS_rho234_temp180_ye60_version_1.1_20120817.h5");
+
+  constexpr bool use_energy_shift = true;
+  constexpr bool recompute_mu_nu = false;
+  EOS_Tabulated::readtable_scollapse(table_name.c_str(), use_energy_shift, recompute_mu_nu);
+
+  std::cout << "Read Table" << std::endl;
+
+
+  double rho = 7.582629253507815e14*Margherita_constants::RHOGF;//7.582629253507815e14*Margherita_constants::RHOGF;
+  double ye = 0.234693877551020;
+  double temp = 16.852590447507527;
+
+  rho = 0.00119667;
+  temp = 29.63349846;
+  ye = 0.10156642;
+    
+  
+  std::cout << "rho: " << rho << std::endl;
+  std::cout << "ye: " << ye << std::endl;
+
+  std::cout << "temp: " << temp << std::endl;
+    
+  const auto tau_init= compute_analytic_opacity(rho);
+
+  const auto tau_init_T = compute_analytic_opacity(rho,temp);
+  
+  std::cout << "Tau_init: " << tau_init << std::endl ;
+  std::cout << "Tau_init_T:" << tau_init_T << std::endl ; 
+  
+  std::array<double,3> tau_n {{tau_init_T,tau_init_T,tau_init_T}};
+  auto tau_e = tau_n;
+    
+  auto F= Fugacities<double>(rho,temp,ye, std::move(tau_n));
+    
+  auto eas = EAS(F);
+  eas.calc_eas();
+
+   std::cout <<std::endl;
+ std::cout << "Q_cgs" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.Q_cgs(i) << " , " ;
+ std::cout <<std::endl;
+  std::cout << "Q_cactus" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.Q_cactus(i) << " , " ;
+ std::cout <<std::endl;
+
+ std::cout << "R_cactus" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.R_cactus(i) << " , " ;
+ std::cout <<std::endl;
+ 
+ std::cout << "kappa_s_cactus" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.kappa_s_cactus(i) << " , " ;
+ std::cout <<std::endl;
+
+  std::cout << "kappa_a_cactus" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.kappa_a_cactus(i) << " , " ;
+ std::cout <<std::endl;
+
+   std::cout << "kappa_n_cactus" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.kappa_n_cactus(i) << " , " ;
+ std::cout <<std::endl;
+  std::cout << "eps_fluid_cgs" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.eps2_fluid_cgs(i) << " , " ;
+ std::cout <<std::endl;
+  std::cout << "eps_leak_cgs" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.eps2_leak_cgs(i)  << " , " ;
+ std::cout <<std::endl;
+ std::cout << "eps_cgs" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.eps_cgs(i) << " , " ;
+ std::cout <<std::endl;
+ std::cout << "eps_cgs" <<std::endl;
+  for(int i=0;i<3;++i)
+    std::cout <<  eas.eps_cgs(i) << " , " ;
+ std::cout <<std::endl;
+
+ //std::cout << "T_nu" <<std::endl;
+ // for(int i=0;i<3;++i)
+ //   std::cout <<  eas.neutrino_temperature(eas.eps_mev(i),F.eta[i]) << " , " ;
+ //std::cout <<std::endl;
+ 
+  EOS_Tabulated::error_type error;
+  auto range = EOS_Tabulated::eps_range__rho_ye(rho,ye,error);
+  
+  std::cout <<std::endl;
+  std::cout<<"rho*eps_min: "<< rho*range[0] <<std::endl;
+
+
+ 
+  return 0;
+}

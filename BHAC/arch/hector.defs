@@ -1,0 +1,5 @@
+F90=/home/hector/.openmpi/bin/mpif90
+FFLAGS = -c
+# F90FLAGS = -ffree-form -fimplicit-none -g 
+F90FLAGS = -ffree-form -O0 -fimplicit-none -g -fbacktrace
+LINK= $(F90)  $(F90FLAGS)

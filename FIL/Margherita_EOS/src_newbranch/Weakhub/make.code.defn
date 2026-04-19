@@ -1,0 +1,2 @@
+SRCS = setup_Weakhub.cc
+SUBDIRS = 

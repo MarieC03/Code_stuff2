@@ -1,0 +1,10 @@
+F90=mpif90
+FFLAGS = -c
+CFLAGS = -O3
+LIBS = -lgfortran
+F90FLAGS = -ffree-form -O3 -fimplicit-none
+
+# Needed to link watchdog (C code)
+F90LINKFLAGS = -pthread
+
+LINK= $(F90) $(F90FLAGS) $(F90LINKFLAGS)

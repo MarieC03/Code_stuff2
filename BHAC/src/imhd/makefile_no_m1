@@ -1,0 +1,19 @@
+# Add the objects for MHD:
+
+FOBJECTS += amrvacpar$F correctaux$F mod_imhd_con2prim$F divb$F fct$F mod_physaux$F mod_amr_fct$F postrad$F mod_imhd_intermediate$F fill_gridvars$F mod_full_gr_source$F
+OBJECTS += amrvacpar.o correctaux.o mod_imhd_con2prim.o divb.o fct.o mod_physaux.o mod_amr_fct.o postrad.o mod_imhd_intermediate.o fill_gridvars.o mod_full_gr_source.o
+
+#########################################################################
+# Dependencies:
+#########################################################################
+amrvacphys.o : mod_physaux.o mod_imhd_con2prim.o mod_imhd_intermediate.o mod_xns.o mod_c2b.o mod_full_gr_source.o 
+mod_full_gr_source.o : mod_metric.o mod_eos.o mod_imhd_intermediate.o 
+mod_imhd_con2prim.o   : mod_eos.o mod_eos_tabulated.o mod_eos_idealgas.o mod_eos_polytrope.o mod_metric.o mod_rootfinding.o mod_small_values.o mod_imhd_intermediate.o
+correctaux.o : mod_imhd_con2prim.o
+amr_ghostcells.o : mod_amr_fct.o
+mod_amr_fct.o : mod_fix_conserve.o
+amr_ghostcells.o           : mod_amr_fct.o
+amrgrid.o                  : mod_amr_fct.o
+#fill_gridvars.o            : mod_gridvars.o
+mod_physaux.o : mod_imhd_con2prim.o
+mod_imhd_intermediate.o: mod_metric.o mod_eos.o

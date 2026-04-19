@@ -1,0 +1,66 @@
+# Parameter definitions for thorn ID_converter_ILGRMHD
+
+shares: Margherita
+USES KEYWORD eos_type
+
+shares: HydroBase
+
+EXTENDS keyword initial_hydro
+{
+  "Margherita" :: "Margherita_ID sets this quantity"
+}
+
+EXTENDS keyword initial_entropy
+{
+  "Margherita" :: "Margherita_ID sets this quantity"
+}
+
+EXTENDS keyword initial_temperature
+{
+  "Margherita" :: "Margherita_ID sets this quantity"
+}
+
+EXTENDS keyword initial_Y_e
+{
+  "Margherita" :: "Margherita_ID sets this quantity"
+}
+
+restricted:
+private:
+INT random_seed "Random seed"
+{
+ 0:99999999 :: "Anything unsigned goes."
+} 0
+
+REAL random_pert "Random perturbation atop data"
+{
+ *:* :: "Anything goes."
+} 0
+
+BOOLEAN ID_is_cold "Set ID temp to atmosphere value"
+{
+}"yes"
+
+BOOLEAN ID_uses_beta_equilibrium "Set ID to beta equilibrium"
+{
+}"yes"
+
+REAL rho_threshold "Set everything below to atmosphere values"
+{
+ *:* :: "Everything goes"
+}-1.
+
+BOOLEAN add_velocity_pert "Needed for TOV migration tests etc."
+{
+}"no"
+
+REAL vel_pert "Amplitude"
+{
+ *:* :: "Everything goes, positive is outwards"
+}0.01
+
+REAL r_approx "Approximate radius of the TOV"
+{
+ *:* :: "Everything goes, positive is outwards"
+}8.
+

@@ -1,0 +1,1459 @@
+!================================================================================
+!
+!    BHAC (The Black Hole Accretion Code) solves the equations of
+!    general relativistic magnetohydrodynamics and other hyperbolic systems
+!    in curved spacetimes.
+!
+!    Copyright (C) 2019 Oliver Porth, Hector Olivares, Yosuke Mizuno, Ziri Younsi,
+!    Luciano Rezzolla, Elias Most, Bart Ripperda and Fabio Bacchini
+!
+!    This file is part of BHAC.
+!
+!    BHAC is free software: you can redistribute it and/or modify
+!    it under the terms of the GNU General Public License as published by
+!    the Free Software Foundation, either version 3 of the License, or
+!    (at your option) any later version.
+!
+!    BHAC is distributed in the hope that it will be useful,
+!    but WITHOUT ANY WARRANTY; without even the implied warranty of
+!    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!    GNU General Public License for more details.
+!
+!    You should have received a copy of the GNU General Public License
+!    along with BHAC.  If not, see <https://www.gnu.org/licenses/>.
+!
+!================================================================================
+
+!=============================================================================
+! Routine to fill the components from a numerical metric, read from a file
+! The numerical metric file's name must be 'numerical.met'
+! Its header must contain:
+! Metric name
+! Metric variable names (metric and derivatives)
+! Total number of points	Points in dim. 1	Points in dim. 2   ...
+! Values of the metric variables
+! The order in which the metric components and their
+! derivatives should appear in the file is the following:
+! Metric components:
+! alpha beta1 beta2 beta3 g11 g12 g13 g22 g23 g33
+! ...
+!
+! Hector Olivares
+! 28.05.2017
+!=============================================================================
+
+character*20, parameter     :: coord="numcentered"
+logical, save               :: init_from_g4=.false.
+integer, parameter          :: ncoordpar=1
+double precision, save      :: coordpar(ncoordpar)
+
+logical, save               :: islog=.false. ! True if spherical r coordinate is logarithmic  (MUST BE FALSE FOR NOW!!!)
+integer, save               :: R0_=1 ! R0 to start logarithmic coordinate
+
+! Information on the metric file header
+integer, save     :: ndim_met,typecoord_met
+logical, save     :: present1,present2,present3
+logical, save     :: g3p1
+logical, save     :: default_alpha,& !!! Todos
+                     default_beta1,&
+                     default_beta2,&
+                     default_beta3,&
+                     default_g11,&
+                     default_g12,&
+                     default_g13,&
+                     default_g22,&
+                     default_g23,&
+                     default_g33
+
+!! Indices for the coordinates.
+!integer, save     :: mx1,mx2,mx3
+
+! Indices for the metric components
+
+integer, save     :: alpha_,beta1_,beta2_,beta3_
+integer, save     :: g11_,g12_,g13_
+integer, save     :: g22_,g23_,g33_
+
+! Arrays in which numerical metric and its coordinates will be stored
+
+double precision, dimension(:,:,:,:), allocatable,save  :: gnum
+double precision, dimension(:,:,:,:), allocatable,save  :: xnum
+double precision, save  :: rmax    ! r<rmax: numerical solution, else: apply defaults
+integer, save                                         :: nc1,nc2,nc3
+integer                                               :: unit=15 !file unit to read on
+!-----------------------------------------------------------------------------
+
+
+contains
+!=============================================================================
+subroutine init_coord
+    
+end subroutine init_coord
+!=============================================================================
+double precision function s(r)
+
+!include 'amrvacdef.f'
+
+double precision                               :: r
+! .. local ..
+!-----------------------------------------------------------------------------
+
+if (r.gt.0.0d0) then
+  s = log( r - coordpar(R0_) )
+else
+  s =-log(-r - coordpar(R0_) )
+end if
+
+end function
+!=============================================================================
+double precision function r(s)
+
+!include 'amrvacdef.f'
+
+double precision                               :: s
+! .. local ..
+!-----------------------------------------------------------------------------
+
+if (s.gt.0.0d0) then
+  r = exp(s) + coordpar(R0_)
+else
+  r =-(exp(-s) + coordpar(R0_))
+end if
+
+end function
+!=============================================================================
+double precision function drds(s)
+
+!include 'amrvacdef.f'
+
+double precision                               :: s
+! .. local ..
+!-----------------------------------------------------------------------------
+
+if (s.gt.0.0d0) then
+  drds = exp( s)
+else
+  drds = exp(-s)
+end if
+
+end function
+!=============================================================================
+subroutine read_metric(filename)
+! Read the numerical metric. Based on Oliver Porth's read_oneblock
+
+include 'amrvacdef.f'
+
+character(len=*)       :: filename
+! .. local ..
+character(len=128)     :: metric_name
+character(len=128)     :: metric_vars
+integer                :: nctot, ix1,ix2,ix3
+double precision       :: time
+integer                :: ngg
+integer,dimension(3) :: sendbuff
+!-----------------------------------------------------------------------------
+
+
+
+!----------------------------------------
+! Root does the reading:
+!----------------------------------------
+if (mype == 0) then 
+   open(unit,file=filename,status='unknown')
+   ! The header information
+   ! Metric name
+   read(unit,'(A)') metric_name
+   ! Dimensions = 1,2,3
+   ! Type of coordinates:
+   ! 1=spherical, 2=cylindrical, 3=cartesian
+   ! Which coordinates are present: 1,2,3=
+   ! r,theta,phi ; rho,phi,z ; x,y,z
+   read(unit,*) ndim_met,typecoord_met,present1,present2,present3
+   ! Is the metric 3+1?
+   read(unit,*) g3p1
+   ! Which metric components are default, i.e.
+   ! schwarzschild with m=1 for spherical symmetry.
+   read(unit,*) default_alpha,&
+                default_beta1,&
+                default_beta2,&
+                default_beta3,&
+                default_g11,&
+                default_g12,&
+                default_g13,&
+                default_g22,&
+                default_g23,&
+                default_g33
+   ! Number of points: total and for
+   ! each coordinate direction.
+   ! 1 if coordinate not present.
+   read(unit,*) nctot,nc1,nc2,nc3
+
+   print *, 'metric name:   ',metric_name
+
+   print *, 'Dimensions in metric file:'
+   print *, ndim_met
+   print *, 'Type of coordinates'
+   select case(typecoord_met)
+   case(1)
+     print *, 'Spherical'
+     if (present1) print *, 'r is present'
+     if (present2) print *, 'theta is present'
+     if (present3) print *, 'phi is present'
+   case(2)
+     print *, 'Cylindrical'
+     if (present1) print *, 'rho is present'
+     if (present2) print *, 'phi is present'
+     if (present3) print *, 'z is present'
+   case(3)
+     print *, 'Cartesian'
+     if (present1) print *, 'x is present'
+     if (present2) print *, 'y is present'
+     if (present3) print *, 'z is present'
+   case default
+     call mpistop('Coordinate type for metric unknown')
+   end select
+
+   if (g3p1) then
+     print *, '3+1 metric'
+   else
+     call mpistop('At the moment only 3+1 metrics are supported')
+   end if
+
+   ngg=0
+   if (default_alpha)then
+     alpha_=-1
+   else
+     ngg=ngg+1
+     alpha_=ngg
+   end if  
+   if (default_beta1)then 
+     beta1_=-1
+   else
+     ngg=ngg+1
+     beta1_=ngg
+   end if  
+   if (default_beta2)then 
+     beta2_=-1
+   else
+     ngg=ngg+1
+     beta2_=ngg
+   end if  
+   if (default_beta3)then 
+     beta3_=-1
+   else
+     ngg=ngg+1
+     beta3_=ngg
+   end if  
+   if (default_g11)  then  
+     g11_=-1
+   else
+     ngg=ngg+1
+     g11_=ngg
+   end if  
+   if (default_g12)  then 
+     g12_=-1
+   else
+     ngg=ngg+1
+     g12_=ngg
+   end if  
+   if (default_g13)  then 
+     g13_=-1
+   else
+     ngg=ngg+1
+     g13_=ngg
+   end if  
+   if (default_g22)  then 
+     g22_=-1
+   else
+     ngg=ngg+1
+     g22_=ngg
+   end if  
+   if (default_g23)  then 
+     g23_=-1
+   else
+     ngg=ngg+1
+     g23_=ngg
+   end if  
+   if (default_g33)  then 
+     g33_=-1
+   else
+     ngg=ngg+1
+     g33_=ngg
+   end if  
+
+   print *, ngg,'metric components are given,',10-ngg,'are default.'
+   write(*,*) 'mod_coord_num: reading ',ngg,' variables on unit:', unit
+
+   ! Allocate and read the grid and variables:
+   allocate(xnum(nc1,nc2,nc3,1:ndim_met))
+   allocate(gnum(nc1,nc2,nc3,1:ngg))
+   
+   do ix3=1,nc3
+   do ix2=1,nc2
+   do ix1=1,nc1
+   ! This will work as long as ^NC=3  
+      read(unit,*) xnum(ix1,ix2,ix3,1:ndim_met),&
+                   gnum(ix1,ix2,ix3,1:ngg)
+   end do
+   end do
+   end do
+! Close the file
+   close(unit)
+
+
+end if! mype==0
+
+!----------------------------------------
+! Broadcast what mype=0 read:
+!----------------------------------------
+if (npe>1) then
+   !Broadcast the header information
+
+!  integers: 12 : 
+
+   call MPI_BCAST(ndim_met,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(typecoord_met,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(alpha_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(beta1_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(beta2_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(beta3_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(g11_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(g12_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(g13_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(g22_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(g23_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(g33_,1,MPI_INTEGER,0,icomm,ierrmpi)
+   call MPI_BCAST(ngg,1,MPI_INTEGER,0,icomm,ierrmpi)
+
+   print *, 'Header info int broadcasted, ipe:',mype
+
+!  logicals: 14 :
+   call MPI_BCAST(present1,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(present2,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(present3,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(g3p1,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_alpha,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_beta1,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_beta2,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_beta3,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_g11,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_g12,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_g13,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_g22,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_g23,1,MPI_LOGICAL,0,icomm,ierrmpi)
+   call MPI_BCAST(default_g33,1,MPI_LOGICAL,0,icomm,ierrmpi)
+
+   print *, 'Header info logical broadcasted, ipe:',mype
+
+   ! Boradcast the data
+   ! This will work as long as ^NC=3
+   {sendbuff(^C)=nc^C;\}
+   call MPI_BCAST(sendbuff,^NC,MPI_INTEGER,0,icomm,ierrmpi)
+   if (mype .ne. 0) then 
+      {nc^C=sendbuff(^C);\}
+      ! Allocate the grid and variables:
+      print *, ndim_met,ngg
+      allocate(xnum(nc^C,1:ndim_met))
+      allocate(gnum(nc^C,1:ngg))
+   end if
+   call MPI_BCAST(xnum,{nc^C|*}*ndim_met,MPI_DOUBLE_PRECISION,0,icomm,ierrmpi)
+   call MPI_BCAST(gnum,{nc^C|*}*ngg,MPI_DOUBLE_PRECISION,0,icomm,ierrmpi)
+
+   print *, 'Metric broadcasted, ipe:',mype
+end if! npe>1
+
+! Store maximum value in r to apply defaults after it
+rmax=maxval(xnum(1:nc1,1:nc2,1:nc3,1))
+
+print *,' rmax',rmax
+if (islog) rmax=s(rmax)
+print *,' rmax',rmax
+!call mpistop('End of read_metric')
+
+end subroutine read_metric
+!=============================================================================
+subroutine interpolate_metric(x,igg,out,d^Cout)
+! Based on Oliver Porth's interpolate_oneblock
+! Interpolates on numerical metric and calculates derivatives
+! at first order.
+
+include 'amrvacdef.f'
+
+double precision, dimension(^ND),intent(in)             :: x 
+integer, intent(in)                                     :: igg
+double precision, intent(out)                           :: out
+double precision, optional, intent(out)                 :: d^Cout
+! .. local ..
+double precision, dimension(1:3)                        :: xloc
+integer                                                 :: ic^C, ic1^C, ic2^C
+double precision                                        :: xd1,dx1,xd2,dx2,xd3,dx3
+! For 3D and 2D interpolation
+double precision                                        :: c0, c1, c00, c10, c01, c11
+integer                                                 :: ipivot1,ipivot2,ipivot3, idir
+!-----------------------------------------------------------------------------
+
+xloc=0.0d0
+
+ic1=1;ic2=1;ic3=1
+
+! Interpolate according to the dimensions of the simulation
+! and of the metric file.
+xloc(1)=x(1)
+{^NOONED
+!xloc(1)=x(1)
+if (typeaxial.eq.'slab') then
+    ! This must be changed if 2D simulation contains z_
+    if (present2) xloc(2)=x(2)
+{^IFTHREED
+    if (present3) xloc(3)=x(3)
+}
+else
+  if (ndim_met.eq.2) then
+    if (present2) xloc(2)=x(z_)
+{^IFPHIIN
+    if (present3) xloc(2)=x(^PHI) }
+  else
+    xloc(z_)  =x(z_)
+{^IFPHIIN
+    xloc(^PHI)=x(^PHI) }
+  end if
+end if
+}
+
+!--------------------------------------------
+! Hunt for the index closest to the point
+! This is a bit slow but allows for stretched grids
+! (still need to be orthogonal for interpolation though)
+!--------------------------------------------
+ipivot^D=1;
+select case (ndim_met)
+case (1)
+  ic1 = minloc(dabs(xloc(1)-xnum(:,1,1,1)),1,mask=.true.)
+case (2)
+  ! A distinction must be made whether theta or phi are the second coordinate
+!  xloc(1)=x(1)
+  
+  do idir = 1, ^ND
+     select case (idir)
+     case (1)
+        ic1 = minloc(dabs(xloc(1)-xnum(:,ipivot2,1,idir)),1,mask=.true.)
+
+     case (2)
+        ic2 = minloc(dabs(xloc(2)-xnum(ipivot1,:,1,idir)),1,mask=.true.)
+
+     case default
+        call mpistop("error1 in interpolate_oneblock")
+     end select
+  end do
+
+case (3)
+  do idir = 1, ^ND
+     select case (idir)
+     case (1)
+        ic1 = minloc(dabs(xloc(1)-xnum(:,ipivot2,ipivot3,idir)),1, &
+             mask=.true.)
+     case (2)
+        ic2 = minloc(dabs(xloc(2)-xnum(ipivot1,:,ipivot3,idir)),1, &
+             mask=.true.)
+     case (3)
+        ic3 = minloc(dabs(xloc(3)-xnum(ipivot1,ipivot2,:,idir)),1, &
+             mask=.true.)
+     case default
+        call mpistop("error1 in interpolate_oneblock")
+     end select
+  end do
+end select
+
+! flat interpolation would simply be:
+!out = gnum(ic^D,igg)
+!return
+
+!-------------------------------------------
+! Get the left and right indices
+!-------------------------------------------
+if (xnum(ic1,ic2,ic3,1) .lt. xloc(1)) then
+   ic11 = ic1
+else
+   ic11 = ic1 -1
+end if
+ic21 = ic11 + 1
+
+{^NOONED
+if (ndim_met .gt. 1) then
+  if (xnum(ic1,ic2,ic3,2) .lt. xloc(2)) then
+     ic12 = ic2
+  else
+     ic12 = ic2 -1
+  end if
+  ic22 = ic12 + 1
+end if
+
+{^IFTHREED
+if (ndim_met .gt. 2) then
+  if (xnum(ic1,ic2,ic3,3) .lt. xloc(3)) then
+     ic13 = ic3
+  else
+     ic13 = ic3 -1
+  end if
+  ic23 = ic13 + 1
+end if
+}
+}
+
+!--------------------------------------------
+! apply flat interpolation if outside of range, 
+! change point-location to make this easy!
+!--------------------------------------------
+{
+if (ic1^C .lt. 1) then
+   ic1^C = 1
+   ic2^C = ic1^C + 1
+   if (^C.le.ndim_met) xloc(^C) = xnum({ic^CC},^C)
+end if
+\\}
+{
+if (ic2^C .gt. nc^C) then
+   ic2^C = nc^C
+   ic1^C = ic2^C - 1
+   if (^C.le.ndim_met) xloc(^C) = xnum({ic^CC},^C)
+end if
+\\}
+
+
+!-------------------------------------------
+! linear, bi- and tri- linear interpolations
+!-------------------------------------------
+select case(ndim_met)
+case(1)
+  dx1 = xnum(ic21,1,1,1) - xnum(ic11,1,1,1)
+  xd1 = (xloc(1)-xnum(ic11,1,1,1)) / dx1 
+  out = gnum(ic11,1,1,igg) * (1.0d0 - xd1) + gnum(ic21,1,1,igg) * xd1
+  if (present(d1out)) &
+      d1out=(gnum(ic21,1,1,igg)-gnum(ic11,1,1,igg))/(xnum(ic21,1,1,1) - xnum(ic11,1,1,1))
+  if (present(d2out)) &
+      d2out=0.0d0
+  if (present(d3out)) &
+      d3out=0.0d0
+case(2)
+  dx1 = xnum(ic21,ic12,1,1) - xnum(ic11,ic12,1,1)
+  dx2 = xnum(ic11,ic22,1,2) - xnum(ic11,ic12,1,2)
+  xd1 = (xloc(1)-xnum(ic11,ic12,1,1)) / dx1  
+  xd2 = (xloc(2)-xnum(ic11,ic12,1,2)) / dx2
+  c00 = gnum(ic11,ic12,1,igg) * (1.0d0 - xd1) + gnum(ic21,ic12,1,igg) * xd1
+  c10 = gnum(ic11,ic22,1,igg) * (1.0d0 - xd1) + gnum(ic21,ic22,1,igg) * xd1
+
+  out = c00 * (1.0d0 - xd2) + c10 * xd2
+
+  if (present(d1out)) &
+    d1out=((1.0d0-dx2)*(gnum(ic21,ic12,1,igg) - gnum(ic11,ic12,1,igg))+&
+                   dx2*(gnum(ic21,ic22,1,igg) - gnum(ic11,ic22,1,igg)))/dx1
+  if (present(d2out)) &
+    d2out=(c10-c00)/dx2
+  if (present(d3out)) &
+    d3out=0.0d0
+case(3)
+  dx1 =xnum(ic21,ic12,ic13,1) - xnum(ic11,ic12,ic13,1)
+  dx2 =xnum(ic11,ic22,ic13,2) - xnum(ic11,ic12,ic13,2)
+  dx3 =xnum(ic11,ic12,ic23,3) - xnum(ic11,ic12,ic13,3)
+  xd1 = (xloc(1)-xnum(ic11,ic12,ic13,1)) / (xnum(ic21,ic12,ic13,1) - xnum(ic11,ic12,ic13,1))      
+  xd2 = (xloc(2)-xnum(ic11,ic12,ic13,2)) / (xnum(ic11,ic22,ic13,2) - xnum(ic11,ic12,ic13,2))      
+  xd3 = (xloc(3)-xnum(ic11,ic12,ic13,3)) / (xnum(ic11,ic12,ic23,3) - xnum(ic11,ic12,ic13,3))    
+  
+  c00 = gnum(ic11,ic12,ic13,igg) * (1.0d0 - xd1) + gnum(ic21,ic12,ic13,igg) * xd1
+  c10 = gnum(ic11,ic22,ic13,igg) * (1.0d0 - xd1) + gnum(ic21,ic22,ic13,igg) * xd1
+  c01 = gnum(ic11,ic12,ic23,igg) * (1.0d0 - xd1) + gnum(ic21,ic12,ic23,igg) * xd1
+  c11 = gnum(ic11,ic22,ic23,igg) * (1.0d0 - xd1) + gnum(ic21,ic22,ic23,igg) * xd1
+  
+  c0  = c00 * (1.0d0 - xd2) + c10 * xd2
+  c1  = c01 * (1.0d0 - xd2) + c11 * xd2
+  
+  out = c0 * (1.0d0 - xd3) + c1 * xd3
+  if (present(d1out)) &
+    d1out=((1.0d0-xd3)*((1.0d0-xd2)*(gnum(ic21,ic12,ic13,igg) - gnum(ic11,ic12,ic13,igg))&
+                              + xd2*(gnum(ic21,ic22,ic13,igg) - gnum(ic11,ic22,ic13,igg)))&
+                 + xd3*((1.0d0-xd2)*(gnum(ic21,ic12,ic23,igg) - gnum(ic11,ic12,ic23,igg))&
+                              + dx2*(gnum(ic21,ic22,ic23,igg) - gnum(ic11,ic22,ic23,igg))))/dx1
+  if (present(d2out)) &
+    d2out=((1.0d0-xd3)*(c10 - c00)+&
+                   xd3*(c11 - c01))/dx2
+  if (present(d3out)) &
+    d3out=(c1-c0)/dx3
+end select
+
+end subroutine interpolate_metric
+!=============================================================================
+  subroutine get_sqrtgamma_analytic(x^D,sqrtgamma,is_analytic)
+
+    include 'amrvacdef.f'
+
+    ! Since the metric is numeric, sqrtgamma is not calculated analytically.
+
+    double precision, intent(in)                     :: x^D
+    double precision, intent(out)                    :: sqrtgamma
+    logical, optional                                :: is_analytic
+    !-----------------------------------------------------------------------------
+
+    if(present(is_analytic)) is_analytic = .false.
+
+    sqrtgamma = 0.0
+
+  end subroutine get_sqrtgamma_analytic
+
+!=============================================================================
+  subroutine get_alpha(x^D,alpha,iszero,dalphadj_iszero,dalphadj,jdir)
+
+    include 'amrvacdef.f'
+
+    ! get the lapse.  Optional parameter is true if lapse is
+    ! identically zero (does not really make sense)
+    ! Optional parameters jdir and dalphadj request derivatives
+    ! \partial_j \alpha ; j=jdir
+    double precision, intent(in)                     :: x^D
+    integer, optional, intent(in)                    :: jdir
+    double precision, intent(out)                    :: alpha
+    logical, optional, intent(out)                   :: iszero, dalphadj_iszero
+    double precision, optional, intent(out)          :: dalphadj
+    ! .. local ..
+    double precision, dimension(^ND)                 :: x
+    double precision                                 :: d^Calpha
+    double precision                                 :: dx^D
+    double precision                                 :: alpha_lower, alpha_upper
+    !-----------------------------------------------------------------------------
+    if(present(dalphadj) .and. .not. present(jdir) .or. &
+         present(dalphadj_iszero) .and. .not. present(jdir)) &
+         call mpistop("get_alpha: derivatives requested without direction or output-slot given.")
+
+    if(present(iszero)) iszero = .false.
+
+    if (default_alpha.or.x1.gt.rmax) then
+      call mpistop("for rotating star, there is no default solution. Please give full metric in whole domain")
+    else
+
+      {x(^D)=x^D;}
+
+      if (islog) x(1)=r(x1)
+
+      if (.not.present(jdir)) then
+        call interpolate_metric(x,alpha_,alpha) 
+      else
+        ! call interpolate_metric(x,alpha_,alpha,d^Calpha)
+
+        ! if (islog) d1alpha=d1alpha*drds(x1)
+
+        select case(jdir)
+        
+          {dx^D=dx(^D, levmax);}
+{        case(^D)
+           x(^D) = x(^D) + dx^D
+           call interpolate_metric(x,alpha_,alpha_upper)
+           x(^D) = x(^D) - 2*dx^D
+           call interpolate_metric(x,alpha_,alpha_lower)
+          ! Radial derivative:
+          if (present(dalphadj)) then
+            dalphadj = (alpha_upper - alpha_lower ) / (2*dx^D)
+          end if
+          if (present(dalphadj_iszero)) then
+             dalphadj_iszero = .false.
+          end if\}
+{^IFTWOD
+{^IFTHREEC        
+          case(3)
+          if (present(dalphadj)) then
+            dalphadj = zero
+          end if
+          if (present(dalphadj_iszero)) then
+             dalphadj_iszero = .true.
+          end if
+}
+}
+        end select
+
+      end if ! present(jdir)
+
+    end if
+
+  end subroutine get_alpha
+  !=============================================================================
+  subroutine get_beta(idir,x^D,beta,iszero,dbetaidj_iszero,dbetaidj,jdir)
+
+    include 'amrvacdef.f'
+
+    ! get the (contravariant!!) shift vector.
+    ! The optional argument iszero is true if shift-component is 
+    ! identically zero.
+    ! if requested, dbetaidj is the derivative of the contravariant shift.
+    ! \partial_j \beta^i ; i=idir, j=jdir
+    integer, intent(in)                      :: idir
+    double precision, intent(in)             :: x^D
+    integer, optional, intent(in)            :: jdir
+    double precision, intent(out)            :: beta
+    logical, optional, intent(out)           :: iszero, dbetaidj_iszero
+    double precision, optional, intent(out)  :: dbetaidj
+    ! .. local ..
+    double precision, dimension(^ND)         :: x
+    double precision                         :: d^Cbeta
+    !-----------------------------------------------------------------------------
+    if(present(dbetaidj) .and. .not. present(jdir) .or. &
+         present(dbetaidj_iszero) .and. .not. present(jdir)) &
+         call mpistop("get_beta: derivatives requested &
+         &without direction or output-slot given.")
+
+
+    {x(^D)=x^D;}
+
+    if (islog) x(1)=r(x1)
+
+    select case(idir)
+   {case(^C)
+      if (default_beta^C.or.x1.gt.rmax) then
+
+        beta = zero
+
+        if (present(iszero)) iszero = .true.
+        if (present(dbetaidj)) dbetaidj = 0.0d0
+        if (present(dbetaidj_iszero)) dbetaidj_iszero = .true.
+
+      else
+
+      if(present(iszero)) iszero = .false.
+
+      if (.not.present(dbetaidj)) then 
+        call interpolate_metric(x,beta^C_,beta) 
+        ! If using logarithmic radial coordinate, transform metric element
+        if (islog.and.^C.eq.1) beta=beta*drds(x1)
+      else
+        call interpolate_metric(x,beta^C_,beta,d^CCbeta)
+        ! If using logarithmic radial coordinate, transform metric element
+        ! Second term works because derivateve of exp(s) is exp(s)
+        if (islog.and.^C.eq.1) d1beta=d1beta*drds(x1) + beta*drds(x1)
+
+        if (present(jdir)) then
+          select case(jdir)
+         {case(^CC)
+            if (present(dbetaidj)) dbetaidj=d^CCbeta
+            if (present(dbetaidj_iszero)) dbetaidj_iszero = .false.\}
+          end select
+        end if
+      end if
+
+      end if
+      \}
+
+    end select
+
+  end subroutine get_beta
+  !=============================================================================
+  subroutine get_g_component(iin,jin,x^D,g,iszero,dgdk_iszero,dgdk,kdir)
+
+    include 'amrvacdef.f'
+
+    ! This is at the heart of the scheme: Set the (spatial) metric components here
+    ! and only here...
+    ! Indices of the metric are down (covariant) g_{ij\}
+    ! The optional argument iszero is true if the element is identically zero
+    ! The optional arguments dgdk and kdir request derivatives of the metric
+    ! \partial_k g_{ij\} ; i=iin, j=jin, k=kdir
+    ! The optional argument dgdk_iszero
+    integer, intent(in)                      :: iin,jin
+    integer, optional, intent(in)            :: kdir
+    double precision, intent(in)             :: x^D
+    double precision, intent(out)            :: g
+    logical, optional, intent(out)           :: iszero, dgdk_iszero
+    double precision, optional, intent(out)  :: dgdk
+    ! .. local ..
+    integer                                  :: i,j
+    double precision, dimension(^ND)         :: x
+    double precision                         :: d^Cg
+    !-----------------------------------------------------------------------------
+    if(present(dgdk) .and. .not. present(kdir) .or. &
+         present(dgdk_iszero) .and. .not. present(kdir)) &
+         call mpistop("get_g_component: derivatives requested without &
+         &direction or output-slot given.")
+
+    {x(^D)=x^D;}
+
+    if (islog) x(1)=r(x1)
+
+    ! metric is symmetric: swap indices if needed:
+    ! User needs only to provide values for i<=j (upper triangle).  
+    if (iin>jin) then
+       i=jin; j=iin
+    else
+       i=iin; j=jin
+    end if
+
+    if (present(iszero)) iszero = .false.
+
+    if (present(dgdk_iszero)) dgdk_iszero = .false.
+
+    select case(i)
+    case(1)
+      select case(j)
+      case(1)
+        if (default_g11.or.x1.gt.rmax) then
+          if(present(iszero)) iszero = .false.
+          ! Default is Schwarzschild metric with m=1
+            if (islog) then
+              g = drds(x1)**2/(one-2.0d0*eqpar(m_)/x(1))
+            else
+              g = one/(one-2.0d0*eqpar(m_)/x(1))
+            end if
+          if (present(dgdk)) then
+            if (kdir.ne.1) then
+              dgdk = zero
+            else
+              if (islog) then
+                dgdk = (drds(x1)**2)*(&
+                        -2.0d0*drds(x1)*eqpar(m_)/(x(1)-2.0d0*eqpar(m_))**2 &
+                        +2.0d0/(one-2.0d0*eqpar(m_)/x(1)))
+              else
+                dgdk = -2.0d0*eqpar(m_)/(x(1)-2.0d0*eqpar(m_))**2
+              end if
+            end if
+          end if
+          if (present(dgdk_iszero)) then
+!              dgdk_iszero = .true.
+              dgdk_iszero = (kdir.ne.1)
+          end if
+        else
+          if (.not.present(dgdk)) then
+            call interpolate_metric(x,g11_,g)
+            if (islog) g=g*drds(x1)**2
+          else
+            call interpolate_metric(x,g11_,g,d^Cg)
+            if (islog) then
+              d1g=(drds(x1)**2)*(d1g*drds(x1) + 2.0d0*g)
+              g=g*drds(x1)**2
+            end if
+            select case(kdir)
+{           case(^C)
+              !call interpolate_metric(x,d^Cg11_,dgdk)
+              dgdk=d^Cg\}
+            end select
+          end if
+        end if
+      case(2)
+        if (default_g12.or.x1.gt.rmax) then
+          !! Change here and next case if metric is not diagonal !!
+          if(present(iszero)) iszero = .true.
+          g = zero
+          if (present(dgdk)) dgdk = zero
+          if(present(dgdk_iszero)) dgdk_iszero = .true.
+        else
+          if (.not.present(dgdk)) then
+            call interpolate_metric(x,g12_,g)
+            ! If using logarithmic radial coordinate, transform metric element
+            if (islog) g=g*drds(x1)
+          else
+            call interpolate_metric(x,g12_,g,d^Cg)
+            ! If using logarithmic radial coordinate, transform metric element
+            ! Second term works because derivateve of exp(s) is exp(s)
+            if (islog) d1g=d1g*drds(x1) + g*drds(x1)
+
+            select case(kdir)
+{           case(^C)
+!              call interpolate_metric(x,d^Cg12_,dgdk)
+              dgdk=d^Cg\}
+            end select
+          end if
+        end if
+      case(3)
+        if (default_g13.or.x1.gt.rmax) then
+          if(present(iszero)) iszero = .true.
+          g = zero
+          if (present(dgdk)) dgdk = zero
+          if(present(dgdk_iszero)) dgdk_iszero = .true.
+        else
+          if (.not.present(dgdk)) then
+            call interpolate_metric(x,g13_,g)
+            ! If using logarithmic radial coordinate, transform metric element
+            if (islog) g=g*drds(x1)
+          else
+            call interpolate_metric(x,g13_,g,d^Cg)
+            ! If using logarithmic radial coordinate, transform metric element
+            ! Second term works because derivateve of exp(s) is exp(s)
+            if (islog) d1g=d1g*drds(x1) + g*drds(x1)
+
+            select case(kdir)
+{           case(^C)
+              !call interpolate_metric(x,d^Cg13_,dgdk)
+              dgdk=d^Cg\}
+            end select
+          end if
+        end if
+      end select
+    case(2)
+      select case(j)
+      case(2)
+        if (default_g22.or.x1.gt.rmax) then
+          if(present(iszero)) iszero = .false.
+
+            g = x(1)**2
+
+          if (present(dgdk)) then 
+          select case(kdir)
+          case(1)
+            if (islog) then
+              dgdk = 2.0d0*x(1)*drds(x1)
+            else
+              dgdk = 2.0d0*x(1)
+            end if
+
+            if (present(dgdk_iszero)) dgdk_iszero = .false.
+          case(2)
+            dgdk = zero
+            if (present(dgdk_iszero)) dgdk_iszero = .true.
+          case(3)
+            dgdk = zero
+            if (present(dgdk_iszero)) dgdk_iszero = .true.
+          end select
+          end if
+        else
+          if (.not.present(dgdk)) then
+            call interpolate_metric(x,g22_,g)
+          else
+            call interpolate_metric(x,g22_,g,d^Cg)
+            if (islog) d1g=d1g*drds(x1)
+            select case(kdir)
+{           case(^C)
+              !call interpolate_metric(x,d^Cg22_,dgdk)
+              dgdk=d^Cg\}
+            end select
+          end if
+        end if
+      case(3)
+        !! Change if the metric is not diagonal !!
+        if (default_g23.or.x1.gt.rmax) then
+          if(present(iszero)) iszero = .true.
+          g = zero
+          if (present(dgdk)) dgdk = zero
+          if (present(dgdk_iszero)) dgdk_iszero = .true.
+        else
+          if (.not.present(dgdk)) then
+            call interpolate_metric(x,g23_,g)
+          else
+            call interpolate_metric(x,g23_,g,d^Cg)
+            select case(kdir)
+{           case(^C)
+              !call interpolate_metric(x,d^Cg23_,dgdk)
+              dgdk=d^Cg\}
+            end select
+          end if
+        end if
+      end select
+    case(3)
+        if (default_g33.or.x1.gt.rmax) then
+          if(present(iszero)) iszero = .false.
+
+          g = (x(1)*sin(x(2)))**2
+
+          if (present(dgdk)) then 
+          select case(kdir)
+          case(1)
+
+            dgdk = 2.0d0*x(1)*(sin(x(2)))**2
+            if (islog) dgdk=dgdk*drds(x1)
+
+            if (present(dgdk_iszero)) dgdk_iszero = .false.
+          case(2)
+
+            dgdk = 2.0d0*sin(x(2))*cos(x(2))*x(1)**2
+
+            if (present(dgdk_iszero)) dgdk_iszero = .false.
+          case(3)
+            dgdk = zero
+            if (present(dgdk_iszero)) dgdk_iszero = .true.
+          end select
+          end if
+        else
+          if (.not.present(dgdk)) then
+            call interpolate_metric(x,g33_,g)
+
+          else
+            call interpolate_metric(x,g33_,g,d^Cg)
+            d1g=d1g*drds(x1)
+
+            select case(kdir)
+{           case(^C)
+              dgdk=d^Cg\}
+            end select
+          end if
+        end if
+    end select
+
+    if(g .ne. g) write(*,*) "and yes, it's also a NaN g sometimes"
+  end subroutine get_g_component
+  !=============================================================================
+  subroutine BLToCoord(ixI^L,ixO^L,xBL,xCoord)
+
+    ! identity
+    !
+    include 'amrvacdef.f'
+
+    integer,intent(in)                                     :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: xBL
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xCoord
+    ! .. local ..
+    integer                                                :: ix^D
+    !-----------------------------------------------------------------------------
+
+    xCoord = xBL
+
+    if (islog) then
+
+   {do ix^DB=ixOmin^DB,ixOmax^DB\}
+
+    xCoord(ix^D,r_)=s(xBL(ix^D,r_))
+
+   {end do\}
+
+    end if
+
+  end subroutine BLToCoord
+  !=============================================================================
+  subroutine CoordToBL(ixI^L,ixO^L,xCoord,xBL)
+
+    ! Trivial case
+    !
+    include 'amrvacdef.f'
+
+    integer,intent(in)                                     :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: xCoord
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xBL
+    ! .. local ..
+    integer                                                :: ix^D
+    !-----------------------------------------------------------------------------
+
+    xBL = xCoord
+
+    if (islog) then
+
+   {do ix^DB=ixOmin^DB,ixOmax^DB\}
+
+    xBL(ix^D,r_)=r(xCoord(ix^D,r_))
+
+   {end do\}
+
+    end if
+
+  end subroutine CoordToBL
+  !=============================================================================
+  subroutine CoordToKS(ixI^L,ixO^L,xCoord,xKS)
+
+    ! Of course these are not really KS coordinates,
+    ! this routine only converts to non-logarithmic coordinates
+    ! but is useful when the analogous routine is called for black hole
+    ! spacetimes
+    !
+    include 'amrvacdef.f'
+
+    integer,intent(in)                                     :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: xCoord
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xKS
+    ! .. local ..
+    integer                                                :: ix^D
+    !-----------------------------------------------------------------------------
+
+    xKS = xCoord
+
+    if (islog) then
+
+   {do ix^DB=ixOmin^DB,ixOmax^DB\}
+
+    xKS(ix^D,r_)=r(xCoord(ix^D,r_))
+
+   {end do\}
+
+    end if
+
+  end subroutine CoordToKS
+  !=============================================================================
+  subroutine u4BLtoCoord(ixI^L,ixO^L,x,u4BL,u4Coord)
+
+    ! Transforms the (contravariant) four-velocity u4BL from Boyer-Lindquist coordinates
+    ! to the current (BL) coordinates u4Coord.  Often initial conditions are
+    ! given in terms of BL coordinates and this routine comes in handy.
+    !
+    !
+    include 'amrvacdef.f'
+
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,0:^NC), intent(in)   :: u4BL
+    double precision, dimension(ixI^S,0:^NC), intent(out)  :: u4Coord
+    ! .. local ..
+    !-----------------------------------------------------------------------------
+
+    u4Coord(ixO^S,0:^NC) = u4BL(ixO^S,0:^NC)
+
+    if (islog) u4Coord(ixO^S,r_) = u4BL(ixO^S,r_)*exp(-x(ixO^S,r_))
+
+  end subroutine u4BLtoCoord
+  !=============================================================================
+  subroutine CoordToCart(ixI^L,ixO^L,x,xCart)
+
+    ! Transforms the coordinates to "Boyer-Lindquist Cartesian coordinates"
+    ! x = ra Sin(thetaBL) Cos(phiBL)
+    ! y = ra Sin(thetaBL) Sin(phiBL)
+    ! z = rBL Cos(thetaBL)
+    ! where ra=sqrt(rBL**2+a**2) ! WARNING: I decided to put ra=rBL for now...
+    ! We are already in BL-cordinates, so we only have to do one transformation.
+    !-----------------------------------------------------------------------------
+
+    include 'amrvacdef.f'
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xCart
+    ! .. local ..
+    double precision, dimension(ixI^S)                     :: sth, cth, sph, cph, r
+    double precision, dimension(ixI^S,1:^ND)               :: xBL
+    integer                                                :: zcart_, ycart_
+    !-----------------------------------------------------------------------------
+
+    if (ndim.eq.3) then
+       ycart_=2
+       zcart_=3
+    else if (ndim.eq.2 .and. ^Z.eq.2) then
+       ycart_=1 ! must catch ycart_=1 case and don't use
+       zcart_=2
+    else if (ndim.eq.2 .and. ^PHI.eq.2) then
+       ycart_=2
+       zcart_=1 ! must catch zcart_=1 case and don't use
+    else if (ndim.eq.1) then
+       ycart_=1
+       zcart_=1
+    else
+       call mpistop("CoordToCart: unknown parameter combination of -d, -phi and -z!")
+    end if
+    !-----------------------------------------------------------------------------
+
+     call CoordToBL(ixI^L,ixO^L,x,xBL) 
+
+    {^IFPHIIN
+    sph(ixO^S) = sin(xBL(ixO^S,phi_))
+    cph(ixO^S) = cos(xBL(ixO^S,phi_))
+    \}{^IFPHIOUT
+    sph(ixO^S) = zero
+    cph(ixO^S) = one
+    \}
+
+    {^IFZIN
+    sth(ixO^S) = sin(xBL(ixO^S,z_))
+    cth(ixO^S) = cos(xBL(ixO^S,z_))
+    \}{^IFZOUT
+    sth(ixO^S) = one
+    cth(ixO^S) = zero
+    \}
+
+    r(ixO^S) = xBL(ixO^S,1)
+
+    xCart(ixO^S,1) = r(ixO^S) * sth(ixO^S)*cph(ixO^S)
+    if (ycart_.ne.1) &
+         xCart(ixO^S,ycart_) = r(ixO^S) * sth(ixO^S)*sph(ixO^S)
+    if (zcart_.ne.1) &
+         xCart(ixO^S,zcart_) = r(ixO^S)*cth(ixO^S)
+
+  end subroutine CoordToCart
+  !=============================================================================
+  subroutine u4CoordToCart(ixI^L,ixO^L,x,u4Coord,u4Cart,J)
+
+    ! Transforms any contravariant four vector u4Coord in the current coordinates
+    ! to a vector in the basis of "Boyer-Lindquist Cartesian coordinates".
+    ! t = tBL
+    ! x = sqrt(rBL**2+a**2) Sin(thetaBL) Cos(phiBL)
+    ! y = sqrt(rBL**2+a**2) Sin(thetaBL) Sin(phiBL)
+    ! z = rBL Cos(thetaBL)
+    ! We are already in BL-cordinates, so we only have to do one transformation.  
+    ! The transformation matrix J=del(t,x,y,z)/del(tBL,rBL,thetaBL,phiBL)
+    !
+    !     | 1               0                             0                        0                          |
+    !     | 0   rBL/ra Sin(thetaBL) Cos(phiBl)    ra Cos(thetaBL) Cos(phiBL)    - ra Sin(thetaBL) Sin(phiBL)  |
+    ! J = | 0   rBL/ra Sin(thetaBL) Sin(phiBL)    ra Cos(thetaBL) Sin(phiBL)      ra Sin(thetaBL) Cos(phiBL)  |
+    !     | 0   Cos(thetaBL)                    - rBL Sin(thetaBL)                 0                          |
+    !
+    ! where ra=sqrt(rBL**2+a**2) ! WARNING: I decided to put ra=rBL for now...
+    ! 
+    ! u4Cart = J u4Coord
+    !
+    ! 3D simulation, three vector components, (-d=33 -z=2, phi=3 , the standard):
+    ! u4Coord = (utBL,urBL,uthetaBL,uphiBL)
+    ! u4Cart  = (ut,ux,uy,uz)
+    !
+    ! r-theta plane (phi=0), three vector components (-d=23 -z=2 -phi=3):
+    ! u4Coord = (utBL,urBL,uthetaBL,uphiBL)
+    ! u4Cart = (ut,ux,uy,uz)
+    !
+    ! r-theta plane (phi = 0), two vector components (-d=22 -z=2 -phi=0):
+    ! u4Coord = (utBL,urBL,uthetaBL)
+    ! u4Cart = (ut,ux,uz)
+    !
+    ! r-phi plane (theta = pi/2), three vector components (-d=23 -phi=2 -z=3)
+    ! u4Coord = (utBL,urBL,uphiBL,uthetaBL)
+    ! u4Cart = (ut,ux,uy,uz)
+    !
+    ! r-phi plane (theta = pi/2), two vector components (-d=22 -phi=2 -z=0)
+    ! u4Coord = (utBL,urBL,uphiBL)
+    ! uCart = (ut,ux,uy)
+    !-----------------------------------------------------------------------------
+
+    include 'amrvacdef.f'
+
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,0:^NC), intent(in)   :: u4Coord
+    double precision, dimension(ixI^S,0:^NC), intent(out)  :: u4Cart
+    double precision, dimension(ixI^S,0:^NC,0:^NC), optional, intent(out)  :: J
+    ! .. local ..
+    double precision, dimension(ixI^S,0:^NC,0:^NC)         :: Jac
+    double precision, dimension(ixI^S,1:^ND)               :: xBL
+    double precision, dimension(ixI^S)                     :: sth, cth, sph, cph, ra
+    integer                                                :: zcart_, ycart_, ix,jx
+    !-----------------------------------------------------------------------------
+
+    if (ndim.eq.3.and.ndir.eq.3) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^PHI .eq. 2) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^Z .eq. 2) then
+       ycart_=3
+       zcart_=2
+    else if (ndir.eq.2 .and. ^Z.eq.2) then
+       ycart_=0 ! must catch ycart_=0 case and don't use
+       zcart_=2
+    else if (ndir.eq.2 .and. ^PHI.eq.2) then
+       ycart_=2
+       zcart_=0 ! must catch zcart_=0 case and don't use
+    else if (ndir.eq.1) then
+       ycart_=0
+       zcart_=0
+    else
+       call mpistop("u4CoordToCart: unknown parameter combination of -d, -phi and -z!")
+    end if
+
+    call CoordToBL(ixI^L,ixO^L,x,xBL)
+
+    {^IFPHIIN
+    sph(ixO^S) = sin(xBL(ixO^S,phi_))
+    cph(ixO^S) = cos(xBL(ixO^S,phi_))
+    \}{^IFPHIOUT
+    sph(ixO^S) = zero
+    cph(ixO^S) = one
+    \}
+
+    {^IFZIN
+    sth(ixO^S) = sin(xBL(ixO^S,z_))
+    cth(ixO^S) = cos(xBL(ixO^S,z_))
+    \}{^IFZOUT
+    sth(ixO^S) = one
+    cth(ixO^S) = zero
+    \}
+
+
+    Jac(ixO^S,:,:) = zero
+    Jac(ixO^S,0,0) = one
+
+    Jac(ixO^S,1,1) = sth(ixO^S)*cph(ixO^S)
+    if (islog) Jac(ixO^S,1,1) = Jac(ixO^S,1,1)*exp(x(ixO^S,1))
+
+    {^IFZ
+    Jac(ixO^S,1,^Z) = xBL(ixO^S,1) * cth(ixO^S)*cph(ixO^S)
+    \}
+    {^IFPHI
+    Jac(ixO^S,1,^PHI) = - xBL(ixO^S,1)*sth(ixO^S)*sph(ixO^S)
+    \}
+
+    if (ycart_.ne.1) then
+
+       Jac(ixO^S,ycart_,1) = sth(ixO^S)*sph(ixO^S)
+       if (islog) Jac(ixO^S,ycart_,1) = Jac(ixO^S,ycart_,1)*exp(x(ixO^S,1))
+
+       {^IFZ
+       Jac(ixO^S,ycart_,^ZZ) = xBL(ixO^S,1)*cth(ixO^S)*sph(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,ycart_,^PPHI) = xBL(ixO^S,1)*sth(ixO^S)*cph(ixO^S)
+       \}
+    end if
+
+    if(zcart_.ne.1) then
+       Jac(ixO^S,zcart_,1) = cth(ixO^S)
+       if (islog) Jac(ixO^S,zcart_,1) = Jac(ixO^S,zcart_,1)*exp(x(ixO^S,1))
+
+       {^IFZ
+       Jac(ixO^S,zcart_,^ZZ) = - xBL(ixO^S,1)*sth(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,zcart_,^PPHI) = 0.0d0
+       \}
+    end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Jacobian fully assembled, now
+    ! transform contravariant four-vector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    u4Cart(ixO^S,:) = zero
+    do ix=0,ndir
+       do jx=0,ndir
+          u4Cart(ixO^S,ix) = u4Cart(ixO^S,ix) + Jac(ixO^S,ix,jx) * u4Coord(ixO^S,jx)
+       end do
+    end do
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    if (present(J)) J = Jac
+
+  end subroutine u4CoordToCart
+  !=============================================================================
+  subroutine u3CoordToCart(ixI^L,ixO^L,x,u3Coord,u3Cart,J)
+
+    ! Transforms any contravariant three vector u3Coord in the current coordinates
+    ! to a vector in the basis of "Boyer-Lindquist Cartesian coordinates".
+    ! x = sqrt(rBL**2+a**2) Sin(thetaBL) Cos(phiBL)
+    ! y = sqrt(rBL**2+a**2) Sin(thetaBL) Sin(phiBL)
+    ! z = rBL Cos(thetaBL)
+    ! We are already in BL-cordinates, so we only have to do one transformation.  
+    ! The transformation matrix J=del(x,y,z)/del(rBL,thetaBL,phiBL)
+    ! Since the coordinates don't depend on time, this is the same transformation as for the
+    ! four-vector u4CoordToCart()
+    !
+    !     | rBL/ra Sin(thetaBL) Cos(phiBl)    ra Cos(thetaBL) Cos(phiBL)    - ra Sin(thetaBL) Sin(phiBL)  |
+    ! J = | rBL/ra Sin(thetaBL) Sin(phiBL)    ra Cos(thetaBL) Sin(phiBL)      ra Sin(thetaBL) Cos(phiBL)  |
+    !     | Cos(thetaBL)                    - rBL Sin(thetaBL)                 0                          |
+    !
+    ! where ra=sqrt(rBL**2+a**2) ! WARNING: I decided to put ra=rBL for now...
+    ! 
+    ! u3Cart = J u3Coord
+    !-----------------------------------------------------------------------------
+
+    include 'amrvacdef.f'
+
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,1:^NC), intent(in)   :: u3Coord
+    double precision, dimension(ixI^S,1:^NC), intent(out)  :: u3Cart
+    double precision, dimension(ixI^S,1:^NC,1:^NC), optional, intent(out)  :: J
+    ! .. local ..
+    double precision, dimension(ixI^S,1:^ND)               :: xBL
+    double precision, dimension(ixI^S,1:^NC,1:^NC)         :: Jac
+    double precision, dimension(ixI^S)                     :: sth, cth, sph, cph, ra
+    integer                                                :: zcart_, ycart_, ix,jx
+    !-----------------------------------------------------------------------------
+
+    if (ndim.eq.3.and.ndir.eq.3) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^PHI .eq. 2) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^Z .eq. 2) then
+       ycart_=3
+       zcart_=2
+    else if (ndir.eq.2 .and. ^Z.eq.2) then
+       ycart_=1 ! must catch ycart_=1 case and don't use
+       zcart_=2
+    else if (ndir.eq.2 .and. ^PHI.eq.2) then
+       ycart_=2
+       zcart_=1 ! must catch zcart_=1 case and don't use
+    else if (ndir.eq.1) then
+       ycart_=1
+       zcart_=1
+    else
+       call mpistop("u3CoordToCart: unknown parameter combination of -d, -phi and -z!")
+    end if
+
+    call CoordToBL(ixI^L,ixO^L,x,xBL)
+
+    {^IFPHIIN
+    sph(ixO^S) = sin(xBL(ixO^S,phi_))
+    cph(ixO^S) = cos(xBL(ixO^S,phi_))
+    \}{^IFPHIOUT
+    sph(ixO^S) = zero
+    cph(ixO^S) = one
+    \}
+
+    {^IFZIN
+    sth(ixO^S) = sin(xBL(ixO^S,z_))
+    cth(ixO^S) = cos(xBL(ixO^S,z_))
+    \}{^IFZOUT
+    sth(ixO^S) = one
+    cth(ixO^S) = zero
+    \}
+
+    Jac(ixO^S,1,1) = sth(ixO^S)*cph(ixO^S)
+    if (islog) Jac(ixO^S,1,1) = Jac(ixO^S,1,1)*exp(x(ixO^S,1))
+
+    {^IFZ
+    Jac(ixO^S,1,^Z) = xBL(ixO^S,1) * cth(ixO^S)*cph(ixO^S)
+    \}
+    {^IFPHI
+    Jac(ixO^S,1,^PHI) = - xBL(ixO^S,1)*sth(ixO^S)*sph(ixO^S)
+    \}
+
+    if (ycart_.ne.1) then
+
+       Jac(ixO^S,ycart_,1) = sth(ixO^S)*sph(ixO^S)
+       if (islog) Jac(ixO^S,ycart_,1) = Jac(ixO^S,ycart_,1)*exp(x(ixO^S,1))
+
+       {^IFZ
+       Jac(ixO^S,ycart_,^ZZ) = xBL(ixO^S,1)*cth(ixO^S)*sph(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,ycart_,^PPHI) = xBL(ixO^S,1)*sth(ixO^S)*cph(ixO^S)
+       \}
+    end if
+
+    if(zcart_.ne.1) then
+       Jac(ixO^S,zcart_,1) = cth(ixO^S)
+       if (islog) Jac(ixO^S,zcart_,1) = Jac(ixO^S,zcart_,1)*exp(x(ixO^S,1))
+
+       {^IFZ
+       Jac(ixO^S,zcart_,^ZZ) = - xBL(ixO^S,1)*sth(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,zcart_,^PPHI) = 0.0d0
+       \}
+    end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Jacobian fully assembled, now
+    ! transform contravariant three-vector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    u3Cart(ixO^S,:) = zero
+    do ix=1,ndir
+       do jx=1,ndir
+          u3Cart(ixO^S,ix) = u3Cart(ixO^S,ix) + Jac(ixO^S,ix,jx) * u3Coord(ixO^S,jx)
+       end do
+    end do
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    if (present(J)) J = Jac
+
+  end subroutine u3CoordToCart
+  !=============================================================================
+  ! Dummies
+  !=============================================================================
+  subroutine get_dgammainvdk(x^D,dgammainvdk,k)
+    ! Obtains the derivatives of the inverse _spatial_ metric
+    ! \partial_k gamma^{ij\} for a given k. 
+    ! This is not required when initialising gamma, lapse and shift
+    ! e.g. when set init_from_g4 = .false.
+
+    double precision, intent(in)           :: x^D
+    double precision, intent(out)          :: dgammainvdk(1:^NC,1:^NC)
+    integer, intent(in)                    :: k
+    ! .. local ..
+    !-----------------------------------------------------------------------------
+
+    call mpistop("get_dgammainvdk: Not required and not implemented.")
+
+    dgammainvdk = 0.0d0
+    
+  end subroutine get_dgammainvdk
+  !=============================================================================
+  ! End of coordinate-specific definitions.
+  !=============================================================================
+
+

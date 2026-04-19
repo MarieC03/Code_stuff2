@@ -1,0 +1,6 @@
+F90=/mnt/beegfs/IntelHDF5/hdf5-1.10.3/bin/h5pfc
+CC=/mnt/beegfs/IntelHDF5/hdf5-1.10.3/bin/h5pcc
+CXX=/mnt/beegfs/IntelHDF5_CXX/hdf5-1.10.3/bin/h5c++
+FFLAGS = -c 
+F90FLAGS = -xHost -O3 -FR -implicitnone  -L/usr/lib/x86_64-linux-gnu/hdf5/serial -lstdc++
+LINK= $(F90)  $(F90FLAGS)

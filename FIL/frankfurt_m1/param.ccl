@@ -1,0 +1,173 @@
+# Parameter definitions for thorn frankfurt_m1
+
+shares: ADMBase
+USES CCTK_INT lapse_timelevels
+USES CCTK_INT shift_timelevels
+USES CCTK_INT metric_timelevels
+
+#########################################################
+shares: margherita
+USES CCTK_REAL rho_atm
+
+restricted:
+
+BOOLEAN register_ADM_SandR "Do we want to register the metric quantities as SaveAndRestore - Needed for fixed space-times!"
+{
+}no
+
+#########################################################
+
+restricted:
+
+KEYWORD m1_which_eas "What routine to use for transport coefficients?" STEERABLE=recover
+{
+ "microphysical"           :: "Margherita sets these"
+ "microphysical-corrected" :: "Same as above + correction for beta equilibrium in optically thick regime"
+ "test"			   :: "Don't do anything, the eas were set from ID according to some test"
+ "Weakhub"		   :: "Using Weakhub realistic neutrino microphysics inside Margherita"
+} "microphysical-corrected"
+
+KEYWORD m1_which_tau "What routine to use for transport coefficients?" STEERABLE=recover
+{
+ "simple"           :: "Use analytic formula from Deaton+2013"
+ "eikonal-simple"   :: "Solving eikonal equation for optical depth"
+} "simple"
+
+KEYWORD m1_recon_type "What reconstruction scheme to use" STEERABLE=never
+{
+  "minmod" :: "Simple minmod reconstruction"
+  "mc2"    :: "Second order monotonized central reconstruction"
+  "weno5"  :: "WENO" 
+} "mc2"
+
+#########################################################
+# SYMMETRY BOUNDARY PARAMS. Needed for handling staggered gridfunctions.
+KEYWORD Symmetry "Symmetry: 0=NOSYMM, 1=EQUATORIAL. FIXME: Use ET symmetry interface. PROBLEM: ET does not support staggered gridfunctions"
+{
+  "none"       :: "no symmetry, full 3d domain"
+  "equatorial" :: "NOT READY FOR PRIME TIME: reflection across z=0"
+} "none"
+
+#########################################################
+# OUTER BOUNDARY CONDITION CHOICE
+KEYWORD Radiation_BC "Chosen Radiation boundary condition"
+{
+  "outflow" :: "Outflow boundary conditions"
+  "frozen"  :: "Frozen boundaries"
+} "outflow"
+
+#########################################################
+BOOLEAN m1_backreact_fluid "couple to the fluid?" steerable=ALWAYS
+{
+} yes
+
+CCTK_REAL couple_fluid "coupling strengh between fluid and radiation" STEERABLE=ALWAYS
+{
+  0:*  :: "1.0 is full coupling and 0.0 no coupling. Anything in between doesnt make sense."
+} 1.0
+
+CCTK_REAL couple_momenta "coupling strengh between fluid and radiation" STEERABLE=ALWAYS
+{
+  0:*  :: "1.0 is full coupling and 0.0 no coupling. Anything in between doesnt make sense."
+} 1.0
+
+CCTK_REAL couple_energy "coupling strengh between fluid and radiation" STEERABLE=ALWAYS
+{
+  0:*  :: "1.0 is full coupling and 0.0 no coupling. Anything in between doesnt make sense."
+} 1.0
+
+CCTK_REAL couple_ye "coupling strengh between fluid and radiation" STEERABLE=ALWAYS
+{
+  0:*  :: "1.0 is full coupling and 0.0 no coupling. Anything in between doesnt make sense."
+} 1.0
+
+CCTK_REAL couple_ymu "coupling strengh between fluid and radiation" STEERABLE=ALWAYS
+{
+  0:*  :: "1.0 is full coupling and 0.0 no coupling. Anything in between doesnt make sense."
+} 1.0
+
+CCTK_REAL couple_entropy "coupling strengh between fluid and radiation" STEERABLE=ALWAYS
+{
+  0:*  :: "1.0 is full coupling and 0.0 no coupling. Anything in between doesnt make sense."
+} 0.0 
+
+
+BOOLEAN evolve_radiation "Helps to dynamically turn-on/off radiation" STEERABLE=ALWAYS
+{
+} "yes"
+
+CCTK_REAL r_atmo_damping "Reduce atmo energy for r > r_atmo_damping"
+{
+ 1.:* :: "Very large turns off"
+} 1000.0
+
+#########################################################s
+
+CCTK_INT verbosity "How much do you want me to annoy you?" STEERABLE=ALWAYS
+{
+0:2 :: "0 is not verbose, 1 some useful info, 2 debugging"
+} 1
+
+CCTK_REAL N_atmo "Number density floor (all neutrino species!)" STEERABLE=always
+{
+0:* :: "Problem dependent, have fun!"
+} 5e-15
+
+CCTK_REAL E_atmo "Energy floor for all neutrino species" STEERABLE=always
+{
+0:* :: "Problem dependent"
+} 1e-15
+
+CCTK_REAL M1_atmo_tol "Energy floor for all neutrino species" STEERABLE=always
+{
+0:* :: "Problem dependent"
+} 1e-01
+
+CCTK_REAL lapse_excision "Below this value we floor everything"
+{
+-1:* :: "Anything positive, negative means we don't excise"
+} 0.05
+
+CCTK_REAL speed_eps "Not used currently"
+{
+0:* :: "Anything goes"
+}1e-03
+
+
+CCTK_REAL M1_rho_floor "Beyond this we don't compute fluid-rad coupling" steerable=ALWAYS
+{
+ -1:* :: "0 means always couple radiation to fluid"
+} 1e-12
+
+# For debugging or testing: individually switch on and off each process
+
+# Interactions
+
+BOOLEAN beta_decay "Turn on charged current interactions?" STEERABLE=always
+{
+} yes
+
+BOOLEAN plasmon_decay "Turn on charged current interactions?" STEERABLE=always
+{
+} yes
+
+BOOLEAN bremstrahlung "Turn on charged current interactions?" STEERABLE=always
+{
+} yes
+
+BOOLEAN pair_annihil "Turn on charged current interactions?" STEERABLE=always
+{
+} yes
+
+BOOLEAN use_m1_diagnostics "Turn on M1_Diagnostics output at CCTK analysis?" STEERABLE=always
+{
+} no
+
+BOOLEAN use_5_spec_m1 "Turn on 5 spec m1? otherwise will be 3 spec" STEERABLE=always
+{
+} no
+
+BOOLEAN use_grrt_beta_eq "Turn on beta eqm condition for computing opacity for Weakhub" STEERABLE=always
+{
+} yes
+

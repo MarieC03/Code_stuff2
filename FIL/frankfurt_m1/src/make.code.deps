@@ -1,0 +1,5 @@
+driver_evaluate_M1_collisional_rhs.C: CXXFLAGS+=-fp-model=precise
+driver_get_eas.C: CXXFLAGS+=-fp-model=precise
+m1_fluxes.cc: CXXFLAGS+=-fp-model=precise
+m1_collisional.cc: CXXFLAGS+=-fp-model=precise
+compute_m1_diagnostics.cc : CXXFLAGS+=-fp-model precise

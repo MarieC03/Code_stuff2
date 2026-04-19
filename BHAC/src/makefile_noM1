@@ -1,0 +1,101 @@
+default:
+	@echo '=== Call make or setup.pl from your work-directory, not src!   ==='
+	@echo '=== Please read ../doc/GettingStarted.html                     ==='
+################# Definitions for source files #############################
+
+INCLUDES += amrvacpar$F amrvacusrpar$F mod_indices$F mod_physicaldata$F \
+mod_fix_conserve$F mod_connectivity$F mod_gc_comm$F                   \
+amrvacdef$F amrvacsettings$F $(MAKE_)
+
+FOBJECTS =	                                                        \
+mod_physicaldata$F	mod_indices$F		initialize_vars$F	\
+amrvac$F		advance$F		setdt$F	               	\
+amrini$F		mod_limiter$F		                      	\
+amr_solution_node$F	                                        	\
+errest$F		amrgrid$F		amr_fix_conserve$F      \
+amr_ghostcells$F	amrvacphys$F		amrvacusr$F		\
+finite_volume$F		finite_difference$F				\
+load_balance$F		connectivity$F		mod_fix_conserve$F	\
+mod_connectivity$F	boundary_conditions$F   comm_lib$F		\
+forest$F		mod_forest$F		amr_neighbors$F		\
+amr_coarsen_refine$F	refine$F                mod_gc_comm$F           \
+coarsen$F		set_B0$F             	amr_gc_comm$F	        \
+selectgrids$F        	mod_small_values$F      mod_variables$F         \
+ppm$F                   weno$F	                mp5$F	  \
+mod_post_process$F     
+#mod_cfc$F               \
+mod_cfc_alp$F           mod_cfc_parameters$F    mod_cfc_psi$F           \
+mod_cfc_beta$F
+	
+
+#watchdog$F
+
+
+#COBJECTS =                                                         \
+#watchdog$C                                                         \                                                             \
+
+OBJECTS =								\
+mod_physicaldata.o	mod_indices.o		initialize_vars.o	\
+amrvac.o		advance.o		setdt.o			\
+amrini.o                mod_limiter.o                                   \
+amr_solution_node.o                                                     \
+errest.o		amrgrid.o		amr_fix_conserve.o	\
+amr_ghostcells.o	amrvacphys.o		                        \
+amrvacusr.o		                                            	\
+finite_volume.o		finite_difference.o				\
+load_balance.o		connectivity.o		mod_fix_conserve.o	\
+mod_connectivity.o      boundary_conditions.o	comm_lib.o	        \
+forest.o		mod_forest.o		amr_neighbors.o		\
+amr_coarsen_refine.o	refine.o                mod_gc_comm.o           \
+coarsen.o		set_B0.o                amr_gc_comm.o           \
+selectgrids.o           mod_small_values.o      mod_variables.o         \
+ppm.o                   weno.o	                mp5.o	  \
+mod_post_process.o    
+#mod_cfc.o               \
+mod_cfc_alp.o           mod_cfc_parameters.o    mod_cfc_psi.o           \
+mod_cfc_beta.o
+#watchdog.o mod_watchdog.o
+
+############################################################################
+#  Dependencies:
+############################################################################
+mod_limiter.o : ppm.o weno.o mp5.o
+ppm.o : mod_imhd_intermediate.o
+advance.o : mod_cfc.o mod_gw_br.o
+amrini.o : mod_cfc_parameters.o
+mod_physicaldata.o : mod_indices.o amrvacpar.o 
+amr_fix_conserve.o : mod_fix_conserve.o
+amr_gc_comm.o : mod_gc_comm.o
+amr_ghostcells.o : mod_gc_comm.o
+mod_metric.o               : mod_physicaldata.o
+mod_post_process.o : mod_metric.o mod_imhd_intermediate.o mod_cfc_parameters.o
+forest.o initialize_vars.o : mod_forest.o
+amrvac.o initialize_vars.o : mod_connectivity.o mod_timing.o mod_variables.o mod_healpix_det.o
+amrvacusr.o                : mod_oneblock.o mod_c2b_cart3d.o mod_post_process.o
+
+# If ndim > 1, include multigrid functionality
+#ifneq ($(ndim), 1)
+FOBJECTS += mod_multigrid_coupling$F
+OBJECTS += mod_multigrid_coupling.o
+
+ifeq ($(ndim), 1)
+mod_multigrid_coupling.o: m_octree_mg_1d.o
+FOBJECTS += m_octree_mg_1d$F
+OBJECTS += m_octree_mg_1d.o
+endif
+ifeq ($(ndim), 2)
+mod_multigrid_coupling.o: m_octree_mg_2d.o
+FOBJECTS += m_octree_mg_2d$F
+OBJECTS += m_octree_mg_2d.o
+endif
+
+ifeq ($(ndim), 3)
+mod_multigrid_coupling.o: m_octree_mg_3d.o
+FOBJECTS += m_octree_mg_3d$F
+OBJECTS += m_octree_mg_3d.o
+endif
+
+mod_multigrid_coupling.o: mod_forest.o
+amrvac.o: mod_multigrid_coupling.o
+#endif
+############################################################################

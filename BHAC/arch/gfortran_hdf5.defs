@@ -1,0 +1,7 @@
+F90 = h5pfc.mpich
+#Make sure this is your correct mpi distribution (if you have multiple).
+#Otherwise the program will run with all processes having the same
+#rank and in worst case you won't even realize.
+FFLAGS = -c
+F90FLAGS = -ffree-form -O3 -fimplicit-none
+LINK= $(F90)  $(F90FLAGS)

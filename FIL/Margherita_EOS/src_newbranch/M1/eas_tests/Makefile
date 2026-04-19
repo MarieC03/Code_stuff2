@@ -1,0 +1,1 @@
+icpc -I${HDF5_ROOT}/include -I${I_MPI_ROOT}/intel64/include -I${GSL_ROOT}/include -L${HDF5_ROOT}/lib -L${I_MPI_ROOT}/intel64/lib -L${GSL_ROOT}/lib -lhdf5 -lhd5_cpp -lhdf5_hl -lm -ldl 

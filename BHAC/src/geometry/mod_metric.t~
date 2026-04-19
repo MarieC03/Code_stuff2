@@ -1,0 +1,6 @@
+module mod_metric
+  implicit none
+
+  
+
+end module mod_metric

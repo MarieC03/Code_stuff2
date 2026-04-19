@@ -1,0 +1,2 @@
+SRCS = setup_polytrope.cc hot_slice.cc setup_cold_table.cc
+SUBDIRS = 

@@ -1,0 +1,1 @@
+setup_Weakhub.cc : CXXFLAGS+=-fp-model precise

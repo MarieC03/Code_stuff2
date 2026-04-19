@@ -1,0 +1,766 @@
+!================================================================================
+!
+!    BHAC (The Black Hole Accretion Code) solves the equations of
+!    general relativistic magnetohydrodynamics and other hyperbolic systems
+!    in curved spacetimes.
+!
+!    Copyright (C) 2019 Oliver Porth, Hector Olivares, Yosuke Mizuno, Ziri Younsi,
+!    Luciano Rezzolla, Elias Most, Bart Ripperda and Fabio Bacchini
+!
+!    This file is part of BHAC.
+!
+!    BHAC is free software: you can redistribute it and/or modify
+!    it under the terms of the GNU General Public License as published by
+!    the Free Software Foundation, either version 3 of the License, or
+!    (at your option) any later version.
+!
+!    BHAC is distributed in the hope that it will be useful,
+!    but WITHOUT ANY WARRANTY; without even the implied warranty of
+!    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+!    GNU General Public License for more details.
+!
+!    You should have received a copy of the GNU General Public License
+!    along with BHAC.  If not, see <https://www.gnu.org/licenses/>.
+!
+!================================================================================
+
+!=============================================================================
+! Module to read metric from a carpet data file. 
+! Carpet data file is expected to be in cartesian representation and 
+! cartesian coordinates and will be interpolated to Boyer-Lindquist coordinates
+! -coord=blctob
+! 
+! For usage see Carpet2BHAC Readme.md
+!
+! Frederike Kubandt
+! 14.07.2020
+!
+! based on mod_coord_bl.t by Oliver Porth and mod_coord_num by Hector Olivares 
+!=============================================================================
+
+character*20, parameter     :: coord="blctob"
+logical, save               :: init_from_g4=.false.
+integer, parameter          :: ncoordpar=0
+double precision, save      :: coordpar(ncoordpar)
+
+contains
+!=============================================================================
+subroutine init_coord
+    
+end subroutine init_coord
+
+!=============================================================================
+  subroutine get_sqrtgamma_analytic(x^D,sqrtgamma,is_analytic)
+
+    include 'amrvacdef.f'
+
+    ! Since the metric is numeric, sqrtgamma is not calculated analytically.
+
+    double precision, intent(in)                     :: x^D
+    double precision, intent(out)                    :: sqrtgamma
+    logical, optional                                :: is_analytic
+    !-----------------------------------------------------------------------------
+
+    if(present(is_analytic)) is_analytic = .false.
+
+    sqrtgamma = 0.0
+
+  end subroutine get_sqrtgamma_analytic
+
+!=============================================================================
+  subroutine get_alpha(x^D,alpha,iszero,dalphadj_iszero,dalphadj,jdir)
+
+    use mod_carpetgrid, only: finterpolate
+
+    include 'amrvacdef.f'
+        ! get the lapse.  Optional parameter is true if lapse is
+    ! identically zero (does not really make sense)
+    ! Optional parameters jdir and dalphadj request derivatives
+    ! \partial_j \alpha ; j=jdir
+    double precision, intent(in)                     :: x^D
+    integer, optional, intent(in)                    :: jdir
+    double precision, intent(out)                    :: alpha
+    logical, optional, intent(out)                   :: iszero, dalphadj_iszero
+    double precision, optional, intent(out)          :: dalphadj
+    ! .. local ..
+    double precision                                 :: rBL, phi, theta
+    double precision                                 :: dr, dphi, dtheta
+    !-----------------------------------------------------------------------------
+    if(present(dalphadj) .and. .not. present(jdir) .or. &
+         present(dalphadj_iszero) .and. .not. present(jdir)) &
+         call mpistop("get_alpha: derivatives requested without direction or output-slot given.")
+
+    if(present(iszero)) iszero = .false.
+
+
+    {^IFONED
+    {^NOONEC
+      call mpistop("1D simulation in fromcarpet coordinates currently only supported with 1D vectors.")
+    }  
+    }
+    rBL= x1
+    dr = dx(1, levmax)
+    {^IFPHIIN
+    phi = x^PHI 
+    dphi = dx(^PHI, levmax)
+    }
+    {^IFPHIOUT
+    phi = asin(zero) 
+    dphi = dx(^Z,levmax)
+    }
+    {^IFZIN
+    theta = x^Z
+    dtheta = dx(^Z, levmax)
+    }
+    {^IFZOUT
+    theta = asin(one)   
+    dtheta = dx(^PHI, levmax)
+    }
+
+      if (.not.present(jdir)) then
+         alpha = finterpolate("alp", rBL, phi, theta  )
+      else
+        if (present(dalphadj)) then
+        select case(jdir)
+
+            case(1)
+                dalphadj = (finterpolate("alp", rBL+dr, phi, theta) - finterpolate("alp", rBL-dr, phi, theta) ) / (2*dr)
+            case(^PPHI)
+                dalphadj = (finterpolate("alp", rBL, phi+dphi, theta) - finterpolate("alp", rBL, phi-dphi, theta) )/ (2*dphi)
+                  case(^ZZ) 
+                dalphadj = (finterpolate("alp", rBL, phi, theta+dtheta)- finterpolate("alp", rBL, phi, theta-dtheta) )/ (2*dtheta)
+        end select
+        end if
+        if (present(dalphadj_iszero)) then
+            dalphadj_iszero = .false.
+        end if
+
+      end if ! present(jdir)
+
+
+  end subroutine get_alpha
+  !=============================================================================
+  subroutine get_beta(idir,x^D,beta,iszero,dbetaidj_iszero,dbetaidj,jdir)
+
+    use mod_carpetgrid, only: finterpolate
+    include 'amrvacdef.f'
+
+    ! get the (contravariant!!) shift vector.
+    ! The optional argument iszero is true if shift-component is 
+    ! identically zero.
+    ! if requested, dbetaidj is the derivative of the contravariant shift.
+    ! \partial_j \beta^i ; i=idir, j=jdir
+    integer, intent(in)                      :: idir
+    double precision, intent(in)             :: x^D
+    integer, optional, intent(in)            :: jdir
+    double precision, intent(out)            :: beta
+    logical, optional, intent(out)           :: iszero, dbetaidj_iszero
+    double precision, optional, intent(out)  :: dbetaidj
+    ! .. local ..
+    double precision                         :: rBL, phi, theta
+    double precision                         :: dr, dphi, dtheta
+    integer                                  :: i
+    !-----------------------------------------------------------------------------
+    if(present(dbetaidj) .and. .not. present(jdir) .or. &
+         present(dbetaidj_iszero) .and. .not. present(jdir)) &
+         call mpistop("get_beta: derivatives requested &
+         &without direction or output-slot given.")
+
+
+    if(present(iszero)) iszero = .false.
+    if(present(dbetaidj_iszero)) dbetaidj_iszero = .false.
+
+    ! reorder the indices to match carpet ordering
+    if (idir.eq.^PPHI) then
+        i=2
+    else if (idir.eq.^ZZ) then
+        i=3
+    end if
+
+    ! C2B needs r, phi and theta to be present, so set according to dimensionality
+    ! finite differences calculated based on finest grid level
+    {^IFONED
+    {^NOONEC
+      call mpistop("1D simulation in fromcarpet coordinates currently only supported with 1D vectors.")
+    }  
+    }
+    rBL = x1
+    dr = dx(1, levmax)
+    {^IFPHIIN
+    phi = x^PHI 
+    dphi = dx(^PHI, levmax)
+    }
+    {^IFPHIOUT
+    phi = asin(zero) 
+    dphi = dx(^Z, levmax)
+    }
+    {^IFZIN
+    theta = x^Z
+    dtheta = dx(^Z, levmax)
+    }
+    {^IFZOUT
+    theta = asin(one)
+    dtheta = dx(^PHI, levmax)
+    }
+
+
+    if (.not.present(jdir)) then
+      beta = finterpolate("beta", rBL, phi, theta, idx_in=i)
+    else
+      if (present(dbetaidj)) then
+
+        select case(jdir)
+
+            case(1)
+                dbetaidj = (finterpolate("beta", rBL+dr, phi, theta, idx_in=i) - finterpolate("beta", rBL-dr, phi, theta, idx_in=i) ) / (2*dr)
+            case(^PPHI)
+                dbetaidj = (finterpolate("beta", rBL, phi+dphi, theta, idx_in=i) - finterpolate("beta", rBL, phi-dphi, theta, idx_in=i) )/ (2*dphi)
+            case(^ZZ) 
+                dbetaidj = (finterpolate("beta", rBL, phi, theta+dtheta, idx_in=i) - finterpolate("beta", rBL, phi, theta-dtheta, idx_in=i) )/ (2*dtheta)
+        end select
+      end if 
+    end if
+
+
+
+  end subroutine get_beta
+  !=============================================================================
+  subroutine get_g_component(iin,jin,x^D,g,iszero,dgdk_iszero,dgdk,kdir)
+
+    use mod_carpetgrid, only: finterpolate
+    include 'amrvacdef.f'
+
+    ! This is at the heart of the scheme: Set the (spatial) metric components here
+    ! and only here...
+    ! Indices of the metric are down (covariant) g_{ij\}
+    ! The optional argument iszero is true if the element is identically zero
+    ! The optional arguments dgdk and kdir request derivatives of the metric
+    ! \partial_k g_{ij\} ; i=iin, j=jin, k=kdir
+    ! The optional argument dgdk_iszero
+    integer, intent(in)                      :: iin,jin
+    integer, optional, intent(in)            :: kdir
+    double precision, intent(in)             :: x^D
+    double precision, intent(out)            :: g
+    logical, optional, intent(out)           :: iszero, dgdk_iszero
+    double precision, optional, intent(out)  :: dgdk
+    ! .. local ..
+    integer                                  :: i,j, temp
+    double precision                         :: rBL, phi, theta
+    double precision                         :: dr, dphi, dtheta
+    !-----------------------------------------------------------------------------
+    if(present(dgdk) .and. .not. present(kdir) .or. &
+         present(dgdk_iszero) .and. .not. present(kdir)) &
+         call mpistop("get_g_component: derivatives requested without &
+         &direction or output-slot given.")
+
+    if (present(iszero)) iszero = .false.
+    if (present(dgdk_iszero)) dgdk_iszero = .false.
+    
+    ! metric is symmetric: swap indices if needed:
+    ! User needs only to provide values for i<=j (upper triangle).  
+    if (iin>jin) then
+       i=jin; j=iin
+    else
+       i=iin; j=jin
+    end if
+
+! reorder the indices to match carpet ordering
+     if (jin.eq.^PPHI) then
+        j=2
+    else if (jin.eq.^ZZ) then
+        j=3
+    end if
+    if (iin.eq.^PPHI) then
+        i=2
+    else if (iin.eq.^ZZ) then  
+        i=3
+    end if
+
+    ! this might have swapped the indices again, so check another time:
+     if (i>j) then
+       temp=i; i=j ; j=temp
+    end if
+
+
+    {^IFONED
+    {^NOONEC
+      call mpistop("1D simulation in fromcarpet coordinates currently only supported with 1D vectors.")
+    }  
+    }
+    rBL = x1
+    dr = dx(1, levmax)
+    {^IFPHIIN
+    phi = x^PHI 
+    dphi = dx(^PHI, levmax)
+    }
+    {^IFPHIOUT
+    phi = asin(zero) 
+    dphi = dx(^Z, levmax)
+    }
+    {^IFZIN
+    theta = x^Z
+    dtheta = dx(^Z, levmax)
+    }
+    {^IFZOUT
+    theta = asin(one)
+    dtheta = dx(^PHI, levmax)
+    }
+
+
+    if(.not.present(kdir)) then
+          g = finterpolate("g", rBL, phi, theta, idx_in=i, jdx_in=j)
+    else
+        if (present(dgdk)) then
+          select case(kdir)
+
+            case(1)
+                dgdk = (finterpolate("g", rBL+dr, phi, theta, idx_in=i, jdx_in=j) - finterpolate("g", rBL-dr, phi, theta, idx_in=i, jdx_in=j) ) / (2*dr)
+            case(^PPHI)
+                dgdk = (finterpolate("g", rBL, phi+dphi, theta, idx_in=i, jdx_in=j) - finterpolate("g", rBL, phi-dphi, theta, idx_in=i, jdx_in=j) )/ (2*dphi)
+            case(^ZZ) 
+                dgdk = (finterpolate("g", rBL, phi, theta+dtheta, idx_in=i, jdx_in=j) - finterpolate("g", rBL, phi, theta-dtheta, idx_in=i, jdx_in=j) )/ (2*dtheta)
+        end select
+        end if ! present(dgdk)
+    end if !not present(kdir)
+
+    
+
+
+  end subroutine get_g_component
+  !=============================================================================
+  subroutine BLToCoord(ixI^L,ixO^L,xBL,xCoord)
+
+    ! identity
+    !
+    include 'amrvacdef.f'
+
+    integer,intent(in)                                     :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: xBL
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xCoord
+    ! .. local ..
+    integer                                                :: ix^D
+    !-----------------------------------------------------------------------------
+
+    xCoord = xBL
+
+  end subroutine BLToCoord
+  !=============================================================================
+  subroutine CoordToBL(ixI^L,ixO^L,xCoord,xBL)
+
+    ! Trivial case
+    !
+    include 'amrvacdef.f'
+
+    integer,intent(in)                                     :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: xCoord
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xBL
+    ! .. local ..
+    integer                                                :: ix^D
+    !-----------------------------------------------------------------------------
+
+    xBL = xCoord
+
+
+  end subroutine CoordToBL
+  !=============================================================================
+  subroutine CoordToKS(ixI^L,ixO^L,xCoord,xKS)
+
+    ! Of course these are not really KS coordinates,
+    ! this routine only converts to non-logarithmic coordinates
+    ! but is useful when the analogous routine is called for black hole
+    ! spacetimes
+    !
+    include 'amrvacdef.f'
+
+    integer,intent(in)                                     :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: xCoord
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xKS
+    ! .. local ..
+    integer                                                :: ix^D
+    !-----------------------------------------------------------------------------
+
+    xKS = xCoord
+
+  end subroutine CoordToKS
+  !=============================================================================
+  subroutine u4BLtoCoord(ixI^L,ixO^L,x,u4BL,u4Coord)
+
+    ! Transforms the (contravariant) four-velocity u4BL from Boyer-Lindquist coordinates
+    ! to the current (BL) coordinates u4Coord.  Often initial conditions are
+    ! given in terms of BL coordinates and this routine comes in handy.
+    !
+    !
+    include 'amrvacdef.f'
+
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,0:^NC), intent(in)   :: u4BL
+    double precision, dimension(ixI^S,0:^NC), intent(out)  :: u4Coord
+    ! .. local ..
+    !-----------------------------------------------------------------------------
+
+    u4Coord(ixO^S,0:^NC) = u4BL(ixO^S,0:^NC)
+
+  end subroutine u4BLtoCoord
+  !=============================================================================
+  subroutine CoordToCart(ixI^L,ixO^L,x,xCart)
+
+    ! Transforms the coordinates to "Boyer-Lindquist Cartesian coordinates"
+    ! under assumption a=0
+    ! x = r Sin(thetaBL) Cos(phiBL)
+    ! y = r Sin(thetaBL) Sin(phiBL)
+    ! z = r Cos(thetaBL)
+    !-----------------------------------------------------------------------------
+
+    include 'amrvacdef.f'
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,1:^ND), intent(out)  :: xCart
+    ! .. local ..
+    double precision, dimension(ixI^S)                     :: sth, cth, sph, cph, r
+    double precision, dimension(ixI^S,1:^ND)               :: xBL
+    integer                                                :: zcart_, ycart_
+    !-----------------------------------------------------------------------------
+
+    if (ndim.eq.3) then
+       ycart_=2
+       zcart_=3
+    else if (ndim.eq.2 .and. ^Z.eq.2) then
+       ycart_=1 ! must catch ycart_=1 case and don't use
+       zcart_=2
+    else if (ndim.eq.2 .and. ^PHI.eq.2) then
+       ycart_=2
+       zcart_=1 ! must catch zcart_=1 case and don't use
+    else if (ndim.eq.1) then
+       ycart_=1
+       zcart_=1
+    else
+       call mpistop("CoordToCart: unknown parameter combination of -d, -phi and -z!")
+    end if
+    !-----------------------------------------------------------------------------
+
+     call CoordToBL(ixI^L,ixO^L,x,xBL) 
+
+    {^IFPHIIN
+    sph(ixO^S) = sin(xBL(ixO^S,phi_))
+    cph(ixO^S) = cos(xBL(ixO^S,phi_))
+    \}{^IFPHIOUT
+    sph(ixO^S) = zero
+    cph(ixO^S) = one
+    \}
+
+    {^IFZIN
+    sth(ixO^S) = sin(xBL(ixO^S,z_))
+    cth(ixO^S) = cos(xBL(ixO^S,z_))
+    \}{^IFZOUT
+    sth(ixO^S) = one
+    cth(ixO^S) = zero
+    \}
+
+    r(ixO^S) = xBL(ixO^S,1)
+
+    xCart(ixO^S,1) = r(ixO^S) * sth(ixO^S)*cph(ixO^S)
+    if(any(isnan(xCart(ixI^S, 1)))) call mpistop("xCart is NaN in CoordToCart")
+    if (ycart_.ne.1) &
+         xCart(ixO^S,ycart_) = r(ixO^S) * sth(ixO^S)*sph(ixO^S)
+    if (zcart_.ne.1) &
+         xCart(ixO^S,zcart_) = r(ixO^S) * cth(ixO^S)
+
+  end subroutine CoordToCart
+  !=============================================================================
+  subroutine u4CoordToCart(ixI^L,ixO^L,x,u4Coord,u4Cart,J)
+
+    ! Transforms any contravariant four vector u4Coord in the current coordinates
+    ! to a vector in the basis of "Boyer-Lindquist Cartesian coordinates".
+    ! t = tBL
+    ! x = sqrt(rBL**2+a**2) Sin(thetaBL) Cos(phiBL)
+    ! y = sqrt(rBL**2+a**2) Sin(thetaBL) Sin(phiBL)
+    ! z = rBL Cos(thetaBL)
+    ! We are already in BL-cordinates, so we only have to do one transformation.  
+    ! The transformation matrix J=del(t,x,y,z)/del(tBL,rBL,thetaBL,phiBL)
+    !
+    !     | 1               0                             0                        0                          |
+    !     | 0   rBL/ra Sin(thetaBL) Cos(phiBl)    ra Cos(thetaBL) Cos(phiBL)    - ra Sin(thetaBL) Sin(phiBL)  |
+    ! J = | 0   rBL/ra Sin(thetaBL) Sin(phiBL)    ra Cos(thetaBL) Sin(phiBL)      ra Sin(thetaBL) Cos(phiBL)  |
+    !     | 0   Cos(thetaBL)                    - rBL Sin(thetaBL)                 0                          |
+    !
+    ! where ra=sqrt(rBL**2+a**2) ! WARNING: I decided to put ra=rBL for now...
+    ! 
+    ! u4Cart = J u4Coord
+    !
+    ! 3D simulation, three vector components, (-d=33 -z=2, phi=3 , the standard):
+    ! u4Coord = (utBL,urBL,uthetaBL,uphiBL)
+    ! u4Cart  = (ut,ux,uy,uz)
+    !
+    ! r-theta plane (phi=0), three vector components (-d=23 -z=2 -phi=3):
+    ! u4Coord = (utBL,urBL,uthetaBL,uphiBL)
+    ! u4Cart = (ut,ux,uy,uz)
+    !
+    ! r-theta plane (phi = 0), two vector components (-d=22 -z=2 -phi=0):
+    ! u4Coord = (utBL,urBL,uthetaBL)
+    ! u4Cart = (ut,ux,uz)
+    !
+    ! r-phi plane (theta = pi/2), three vector components (-d=23 -phi=2 -z=3)
+    ! u4Coord = (utBL,urBL,uphiBL,uthetaBL)
+    ! u4Cart = (ut,ux,uy,uz)
+    !
+    ! r-phi plane (theta = pi/2), two vector components (-d=22 -phi=2 -z=0)
+    ! u4Coord = (utBL,urBL,uphiBL)
+    ! uCart = (ut,ux,uy)
+    !-----------------------------------------------------------------------------
+
+    include 'amrvacdef.f'
+
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,0:^NC), intent(in)   :: u4Coord
+    double precision, dimension(ixI^S,0:^NC), intent(out)  :: u4Cart
+    double precision, dimension(ixI^S,0:^NC,0:^NC), optional, intent(out)  :: J
+    ! .. local ..
+    double precision, dimension(ixI^S,0:^NC,0:^NC)         :: Jac
+    double precision, dimension(ixI^S,1:^ND)               :: xBL
+    double precision, dimension(ixI^S)                     :: sth, cth, sph, cph, ra
+    integer                                                :: zcart_, ycart_, ix,jx
+    !-----------------------------------------------------------------------------
+
+    if (ndim.eq.3.and.ndir.eq.3) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^PHI .eq. 2) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^Z .eq. 2) then
+       ycart_=3
+       zcart_=2
+    else if (ndir.eq.2 .and. ^Z.eq.2) then
+       ycart_=0 ! must catch ycart_=0 case and don't use
+       zcart_=2
+    else if (ndir.eq.2 .and. ^PHI.eq.2) then
+       ycart_=2
+       zcart_=0 ! must catch zcart_=0 case and don't use
+    else if (ndir.eq.1) then
+       ycart_=0
+       zcart_=0
+    else
+       call mpistop("u4CoordToCart: unknown parameter combination of -d, -phi and -z!")
+    end if
+
+    call CoordToBL(ixI^L,ixO^L,x,xBL)
+
+    {^IFPHIIN
+    sph(ixO^S) = sin(xBL(ixO^S,phi_))
+    cph(ixO^S) = cos(xBL(ixO^S,phi_))
+    \}{^IFPHIOUT
+    sph(ixO^S) = zero
+    cph(ixO^S) = one
+    \}
+
+    {^IFZIN
+    sth(ixO^S) = sin(xBL(ixO^S,z_))
+    cth(ixO^S) = cos(xBL(ixO^S,z_))
+    \}{^IFZOUT
+    sth(ixO^S) = one
+    cth(ixO^S) = zero
+    \}
+
+
+    Jac(ixO^S,:,:) = zero
+    Jac(ixO^S,0,0) = one
+
+    Jac(ixO^S,1,1) = sth(ixO^S)*cph(ixO^S)
+
+    {^IFZ
+    Jac(ixO^S,1,^Z) = xBL(ixO^S,1) * cth(ixO^S)*cph(ixO^S)
+    \}
+    {^IFPHI
+    Jac(ixO^S,1,^PHI) = - xBL(ixO^S,1)*sth(ixO^S)*sph(ixO^S)
+    \}
+
+    if (ycart_.ne.1) then
+
+       Jac(ixO^S,ycart_,1) = sth(ixO^S)*sph(ixO^S)
+
+       {^IFZ
+       Jac(ixO^S,ycart_,^ZZ) = xBL(ixO^S,1)*cth(ixO^S)*sph(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,ycart_,^PPHI) = xBL(ixO^S,1)*sth(ixO^S)*cph(ixO^S)
+       \}
+    end if
+
+    if(zcart_.ne.1) then
+       Jac(ixO^S,zcart_,1) = cth(ixO^S)
+
+       {^IFZ
+       Jac(ixO^S,zcart_,^ZZ) = - xBL(ixO^S,1)*sth(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,zcart_,^PPHI) = 0.0d0
+       \}
+    end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Jacobian fully assembled, now
+    ! transform contravariant four-vector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    u4Cart(ixO^S,:) = zero
+    do ix=0,ndir
+       do jx=0,ndir
+          u4Cart(ixO^S,ix) = u4Cart(ixO^S,ix) + Jac(ixO^S,ix,jx) * u4Coord(ixO^S,jx)
+       end do
+    end do
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    if (present(J)) J = Jac
+
+  end subroutine u4CoordToCart
+  !=============================================================================
+  subroutine u3CoordToCart(ixI^L,ixO^L,x,u3Coord,u3Cart,J)
+
+    ! Transforms any contravariant three vector u3Coord in the current coordinates
+    ! to a vector in the basis of "Boyer-Lindquist Cartesian coordinates".
+    ! x = sqrt(rBL**2+a**2) Sin(thetaBL) Cos(phiBL)
+    ! y = sqrt(rBL**2+a**2) Sin(thetaBL) Sin(phiBL)
+    ! z = rBL Cos(thetaBL)
+    ! We are already in BL-cordinates, so we only have to do one transformation.  
+    ! The transformation matrix J=del(x,y,z)/del(rBL,thetaBL,phiBL)
+    ! Since the coordinates don't depend on time, this is the same transformation as for the
+    ! four-vector u4CoordToCart()
+    !
+    !     | rBL/ra Sin(thetaBL) Cos(phiBl)    ra Cos(thetaBL) Cos(phiBL)    - ra Sin(thetaBL) Sin(phiBL)  |
+    ! J = | rBL/ra Sin(thetaBL) Sin(phiBL)    ra Cos(thetaBL) Sin(phiBL)      ra Sin(thetaBL) Cos(phiBL)  |
+    !     | Cos(thetaBL)                    - rBL Sin(thetaBL)                 0                          |
+    !
+    ! where ra=sqrt(rBL**2+a**2) ! WARNING: I decided to put ra=rBL for now...
+    ! 
+    ! u3Cart = J u3Coord
+    !-----------------------------------------------------------------------------
+
+    include 'amrvacdef.f'
+
+    integer, intent(in)                                    :: ixI^L, ixO^L
+    double precision, dimension(ixI^S,1:^ND), intent(in)   :: x
+    double precision, dimension(ixI^S,1:^NC), intent(in)   :: u3Coord
+    double precision, dimension(ixI^S,1:^NC), intent(out)  :: u3Cart
+    double precision, dimension(ixI^S,1:^NC,1:^NC), optional, intent(out)  :: J
+    ! .. local ..
+    double precision, dimension(ixI^S,1:^ND)               :: xBL
+    double precision, dimension(ixI^S,1:^NC,1:^NC)         :: Jac
+    double precision, dimension(ixI^S)                     :: sth, cth, sph, cph, ra
+    integer                                                :: zcart_, ycart_, ix,jx
+    !-----------------------------------------------------------------------------
+
+    if (ndim.eq.3.and.ndir.eq.3) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^PHI .eq. 2) then
+       ycart_=2
+       zcart_=3
+    else if ((ndim.eq.2.or.ndim.eq.1).and.ndir.eq.3 .and. ^Z .eq. 2) then
+       ycart_=3
+       zcart_=2
+    else if (ndir.eq.2 .and. ^Z.eq.2) then
+       ycart_=1 ! must catch ycart_=1 case and don't use
+       zcart_=2
+    else if (ndir.eq.2 .and. ^PHI.eq.2) then
+       ycart_=2
+       zcart_=1 ! must catch zcart_=1 case and don't use
+    else if (ndir.eq.1) then
+       ycart_=1
+       zcart_=1
+    else
+       call mpistop("u3CoordToCart: unknown parameter combination of -d, -phi and -z!")
+    end if
+
+    call CoordToBL(ixI^L,ixO^L,x,xBL)
+
+    {^IFPHIIN
+    sph(ixO^S) = sin(xBL(ixO^S,phi_))
+    cph(ixO^S) = cos(xBL(ixO^S,phi_))
+    \}{^IFPHIOUT
+    sph(ixO^S) = zero
+    cph(ixO^S) = one
+    \}
+
+    {^IFZIN
+    sth(ixO^S) = sin(xBL(ixO^S,z_))
+    cth(ixO^S) = cos(xBL(ixO^S,z_))
+    \}{^IFZOUT
+    sth(ixO^S) = one
+    cth(ixO^S) = zero
+    \}
+
+    Jac(ixO^S,1,1) = sth(ixO^S)*cph(ixO^S)
+
+    {^IFZ
+    Jac(ixO^S,1,^Z) = xBL(ixO^S,1) * cth(ixO^S)*cph(ixO^S)
+    \}
+    {^IFPHI
+    Jac(ixO^S,1,^PHI) = - xBL(ixO^S,1)*sth(ixO^S)*sph(ixO^S)
+    \}
+
+    if (ycart_.ne.1) then
+
+       Jac(ixO^S,ycart_,1) = sth(ixO^S)*sph(ixO^S)
+
+       {^IFZ
+       Jac(ixO^S,ycart_,^ZZ) = xBL(ixO^S,1)*cth(ixO^S)*sph(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,ycart_,^PPHI) = xBL(ixO^S,1)*sth(ixO^S)*cph(ixO^S)
+       \}
+    end if
+
+    if(zcart_.ne.1) then
+       Jac(ixO^S,zcart_,1) = cth(ixO^S)
+
+       {^IFZ
+       Jac(ixO^S,zcart_,^ZZ) = - xBL(ixO^S,1)*sth(ixO^S)
+       \}
+       {^IFPHI
+       Jac(ixO^S,zcart_,^PPHI) = 0.0d0
+       \}
+    end if
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Jacobian fully assembled, now
+    ! transform contravariant three-vector
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    u3Cart(ixO^S,:) = zero
+    do ix=1,ndir
+       do jx=1,ndir
+          u3Cart(ixO^S,ix) = u3Cart(ixO^S,ix) + Jac(ixO^S,ix,jx) * u3Coord(ixO^S,jx)
+       end do
+    end do
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    if (present(J)) J = Jac
+
+  end subroutine u3CoordToCart
+
+  ! Dummies
+  !=============================================================================
+  subroutine get_dgammainvdk(x^D,dgammainvdk,k)
+    ! Obtains the derivatives of the inverse _spatial_ metric
+    ! \partial_k gamma^{ij\} for a given k. 
+    ! This is not required when initialising gamma, lapse and shift
+    ! e.g. when set init_from_g4 = .false.
+
+    double precision, intent(in)           :: x^D
+    double precision, intent(out)          :: dgammainvdk(1:^NC,1:^NC)
+    integer, intent(in)                    :: k
+    ! .. local ..
+    !-----------------------------------------------------------------------------
+
+    call mpistop("get_dgammainvdk: Not required and not implemented.")
+
+    dgammainvdk = 0.0d0
+    
+  end subroutine get_dgammainvdk
+  !=============================================================================
+  ! End of coordinate-specific definitions.
+  !=============================================================================
+
+

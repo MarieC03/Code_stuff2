@@ -1,0 +1,221 @@
+#
+
+restricted:
+
+KEYWORD eos_type "Type of EOS"
+{
+  "tabulated"  :: "Tabulated nuclear EOS"
+  "polytropic" :: "Polytropic EOS"
+  "tabulated_cold" :: "Tabulated cold EOS"
+  "tabulated_leptonic" :: "Tabulated leptonic(muonic) EOS"
+} "tabulated"
+######################### EOS handling ####################################
+
+INT num_pieces "Number of pieces"
+{
+  1:20 :: "Positive number of pieces"
+} 1
+
+REAL Rho_EOS[20] "Piecewise polytrope"
+{
+ 0:* :: "Positive or zero"
+} 0.0
+
+REAL gamma_th "Gamma"
+{
+ 1:* :: "Positive"
+} 1.8
+
+REAL entropy_min "Minimal entropy, only for polytropes"
+{
+ 0:* :: "Positive or zero"
+} 1.0d-13
+
+REAL Gamma_EOS[20] "Piecewise polytrope"
+{
+ 0:* :: "Positive or zero"
+} 1.3
+
+REAL pw_rhomin "Minimum density for the polytrope" STEERABLE=RECOVER
+{
+ 0:* :: "Positive"
+}5.e-16
+
+REAL pw_rhomax "Maximum density for the polytrope" STEERABLE=RECOVER
+{
+ 0:* :: "Positive"
+}1.
+
+
+REAL K_EOS "K_0 as in Takami et al. https://arxiv.org/pdf/1412.3240v2.pdf"
+{
+ 0:* :: "Positive or zero"
+} 1.0
+
+KEYWORD Units "Which unit system to use"
+{
+  "geometrised"	::  "aka Cactus units, M_sol=1"
+  "cgs"		::  "cgs units for both K_EOS and Rho_EOS"
+  "cgs_cgs_over_c2" ::  "cgs units for rho but K_cgs/c^2 for K_EOS"
+} "geometrised"
+
+
+################ Finite-Temperature Nuclear EOS
+
+BOOLEAN nuceos_read_table "Read in EOS table?" STEERABLE=RECOVER
+{
+} "No"
+
+STRING nuceos_table_name "nuceos table name (hdf5)" STEERABLE=RECOVER
+{
+ .* :: "Can be anything"
+} "blah.h5"
+
+KEYWORD nuceos_table_type "nuceos table type" STEERABLE=RECOVER
+{
+  "stellarcollapse"	::  "Table is from https://stellarcollapse.org/"
+  "compose"		::  "Table is from http://http://compose.obspm.fr/"
+} "stellarcollapse"
+
+BOOLEAN dump_nuceos_table "Dump table in ASCII at beginning" STEERABLE=RECOVER
+{
+} "No"
+
+STRING dump_nuceos_table_name "nuceos dump table name (ASCII)" STEERABLE=RECOVER
+{
+ .* :: "Can be anything"
+} "blah.asc"
+
+BOOLEAN extend_table "extend the density ranges using polytropic extrapolation" STEERABLE=RECOVER
+{
+}no
+
+### Leptonic table options ###
+STRING leptoniceos_table_name "leptoniceos table name (hdf5)" STEERABLE=RECOVER
+{
+ .* :: "Can be anything"
+} "blah.h5"
+
+### When using eos_type == tabulated_leptonic, this must be turned on
+BOOLEAN use_muonic_table "Use Leptonic table (muonic)" STEERABLE=RECOVER
+{
+}no
+
+### You can choose whether to add electrons contributions
+BOOLEAN add_ele_contributions_to_table "Use electronic table for 3D/4D eos" STEERABLE=RECOVER
+{
+}no
+
+BOOLEAN baryon_eos_contains_e_contri "3D baryon table already have electron contribution?" STEERABLE=RECOVER
+{
+}no
+
+### For generating cold eos table for FUKA and RNS with/without muon beta eqm
+BOOLEAN generate_cold_table "Generate Cold table" STEERABLE=RECOVER
+{
+}no
+
+### Weakhub table options ###
+STRING Weakhub_table_name "Weakhub table name (hdf5)" STEERABLE=RECOVER
+{
+ .* :: "Can be anything"
+} "blah.h5"
+
+### stellar collapse table options ###
+
+BOOLEAN do_energy_shift "shift energies around?" STEERABLE=ALWAYS
+{
+} "yes"
+
+BOOLEAN recompute_mu_nu "Recompute the neutrino chemical potential. This is necessary to fix a bug in the LS EOS from stellarcollapse.org"
+{
+}no
+
+########### Cold table  ################
+
+STRING cold_table_name "Path to cold table"
+{
+ .* :: "Filepath"
+} "filename.h5"
+
+INT cold_table_num_points "Number of points used for linear interpolation during runtime"
+{
+ *:* :: "Should be large"
+}10000
+
+########### Con2Prim and Atmosphere treatment ################
+
+REAL rho_atm "Atmosphere density" STEERABLE=RECOVER
+{
+*:* :: "Should be positive"
+}1.0e-13
+
+REAL temp_atm "Atmosphere density" STEERABLE=RECOVER
+{
+*:* :: "Should be positive, negative values lead to using the table minimum"
+}-1. 
+
+REAL ye_atm "Atmosphere Ye value" STEERABLE=RECOVER
+{
+ *:* :: "Should be within the table bounds"
+}0.4
+
+REAL ymu_atm "Atmosphere Ymu value" STEERABLE=RECOVER
+{
+ *:* :: "Should be within the table bounds"
+}0.001
+
+
+BOOLEAN atmosphere_is_beta_eq "Is the atmosphere in beta equilibrium"
+{
+}yes
+
+REAL tauenergy_min "Minimum of tau_energy"
+{
+ *:* :: "Positive and highly problem dependent"
+}1.e-14
+
+REAL gamma_max "Maximum lorentz factor "
+{
+ 1.:* :: "Positive and more than 10 might not be useful"
+}10.
+
+REAL eps_max "Maximum value of the specific internal energy " STEERABLE=RECOVER
+{
+ *:* :: "This is needed for low density regions in which a tabulated eps might blow up."
+}10.
+
+REAL psi6_threshold "Threshold on psi^6=sqrt(det) to decide whether we have black hole or not" STEERABLE=RECOVER
+{
+ *:* :: "Etienne et al 2012 recommend >10"
+}12.
+
+###################### Hot Slice ############################
+
+INT downsample_num_points "When sampling the hot slice use only so many points from the table"
+{
+ 3:20000 :: "The number of points will automatically be cut to the number of points in the table"
+}10000
+
+REAL temp_slice "Temperature of the slice"
+{
+ 0:*  :: "0 is mapped to the lowest temperature of the table"
+}0
+
+BOOLEAN slice_is_isentropic "Is the slice at constant entropy"
+{
+}no
+
+REAL entropy_slice "Entropy of the slice if isentropic"
+{
+ 0:*  :: "0 is mapped to the lowest temperature of the table"
+}1
+
+##############################################################
+shares: IO
+
+USES STRING out_dir
+
+shares: frankfurt_m1
+USES KEYWORD m1_which_eas
+USES BOOLEAN use_5_spec_m1

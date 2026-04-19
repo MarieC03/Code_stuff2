@@ -1,0 +1,8 @@
+F90=mpif90
+CC=mpicc
+CXX=mpicxx
+
+export HDF5_ROOT=/sw/hawk-rh8/hlrs/spack/release/23.1.0/optional/hdf5/1.10.5-intel-2021.9.0-v3i7ntn5
+FFLAGS = -c
+F90FLAGS = -march=core-avx2 -FR -implicitnone -O3 -I${HDF5_ROOT}/include -I${HDF5_ROOT}/include/shared -L${HDF5_ROOT}/lib -lstdc++ -lhdf5_fortran -lhdf5_hl_fortran -lhdf5_hl -lhdf5 -lz -ldl   
+LINK= $(F90)  $(F90FLAGS)

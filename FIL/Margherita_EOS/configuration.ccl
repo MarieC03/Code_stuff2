@@ -1,0 +1,8 @@
+REQUIRES HDF5 Boost
+REQUIRES GSL
+
+PROVIDES Margherita
+{
+    SCRIPT
+    LANG
+}

@@ -1,0 +1,553 @@
+#
+Cactus::cctk_full_warnings         = no
+Cactus::highlight_warning_messages = no
+
+
+ActiveThorns = "AEILocalInterp Constants Fortran GSL Watchdog Boost"
+ActiveThorns = "SystemTopology"
+
+###################### Termination and checkpointing  #################################################
+
+#Cactus::terminate       = "iteration"
+#Cactus::cctk_itlast     =  500   
+
+Cactus::terminate       = "runtime"
+Cactus::max_runtime     =  20300              # divide by ~203 for ms
+
+#ActiveThorns= "Formaline"
+#Formaline::output_source_subdirectory		= "../../cactus-source"
+
+ActiveThorns= "TerminationTrigger"
+TerminationTrigger::max_walltime = 2
+TerminationTrigger::on_remaining_walltime         = 10
+TerminationTrigger::create_termination_file       = "yes"
+TerminationTrigger::termination_from_file         = "yes"
+TerminationTrigger::termination_file              = "../TERMINATE"
+TerminationTrigger::check_file_every              = 32
+
+
+IOUtil::checkpoint_dir          = "../checkpoint"
+IOUtil::checkpoint_every_walltime_hours = 10
+IOUtil::checkpoint_keep         = 2
+IOUtil::checkpoint_on_terminate = "yes"
+IOUtil::out_dir                 = "./data"
+IOUtil::out_fileinfo            = "none"
+IOUtil::recover                 = "autoprobe"
+IOUtil::recover_dir             = "../checkpoint"
+
+CarpetIOHDF5::checkpoint= "yes"
+CarpetIOHDF5::use_reflevels_from_checkpoint	= "yes"
+
+
+ActiveThorns = "TimerReport"
+TimerReport::out_every      = 1024
+TimerReport::output_all_timers_readable     = "yes"
+
+######################################################################################
+
+#################### Carpet ###################################################
+
+ActiveThorns = "Carpet CarpetLib CarpetInterp LocalInterp2 CarpetReduce LoopControl Slab"
+
+Carpet::verbose           = no
+Carpet::veryverbose       = no
+Carpet::schedule_barriers = no
+Carpet::storage_verbose   = no
+CarpetLib::output_bboxes  = no
+
+Carpet::domain_from_coordbase = yes
+
+driver::ghost_size       = 4
+Carpet::use_buffer_zones = yes
+
+Carpet::prolongation_order_space = 5
+Carpet::prolongation_order_time  = 2
+Carpet::enable_all_storage                                  = "no"
+
+Carpet::convergence_level = 0
+
+Carpet::init_fill_timelevels = yes
+
+#Carpet::processor_topology       = "recursive"
+
+Carpet::poison_new_timelevels = yes
+CarpetLib::poison_new_memory  = yes
+
+Carpet::output_timers_every      = 6400
+CarpetLib::print_timestats_every = 6400
+CarpetLib::print_memstats_every  = 6400
+CarpetLib::combine_sends             = "no" 
+CarpetLib::check_bboxes              = "no"
+CarpetLib::interleave_communications = "yes"
+CarpetLib::combine_recompose         = "no" 
+
+Carpet::grid_coordinates_filename       = "carpet_coord.asc"
+Carpet::grid_structure_filename         = "carpet_grid.asc"
+
+# See https://trac.einsteintoolkit.org/ticket/1512
+LoopControl::settle_after_iteration                         = 0
+
+#############################################################################
+
+
+######################## Grid setup ########################################
+
+
+ActiveThorns = "Boundary CartGrid3D CoordBase SymBase"
+
+CoordBase::domainsize = "minmax"
+
+CoordBase::xmin =  -128.00 # multiply with ~1.477 for km 
+CoordBase::ymin =  -128.00
+CoordBase::zmin =     0.00
+CoordBase::xmax =   128.00
+CoordBase::ymax =   128.00
+CoordBase::zmax =   128.00
+
+CoordBase::spacing = "numcells"
+CoordBase::ncells_x			=  32 #400 dx ~ 0.16 (med) # 256 dx ~ 0.25 (low)
+CoordBase::ncells_y			=  32 #400 dx ~ 0.16 (med) # 256 dx ~ 0.25 (low)
+CoordBase::ncells_z			=  16 #200 dx ~ 0.16 (med) # 128 dx ~ 0.25 (low)
+
+CoordBase::boundary_size_x_lower     = 4
+CoordBase::boundary_size_y_lower     = 4
+CoordBase::boundary_size_z_lower     = 4
+CoordBase::boundary_size_x_upper     = 4
+CoordBase::boundary_size_y_upper     = 4
+CoordBase::boundary_size_z_upper     = 4
+
+
+CoordBase::boundary_shiftout_z_lower =1
+CartGrid3D::type = "coordbase"
+CartGrid3D::domain       = "full"
+CartGrid3D::avoid_origin = "no"
+
+
+ActiveThorns = "ReflectionSymmetry"
+ReflectionSymmetry::reflection_z = yes
+ReflectionSymmetry::avoid_origin_z = no
+
+#=============== Refinement =====================
+ActiveThorns = "CarpetRegrid2"
+Carpet::max_refinement_levels=5
+CarpetRegrid2::num_centres  = 1
+
+CarpetRegrid2::regrid_every		= 128
+CarpetRegrid2::ensure_proper_nesting		= "yes"
+CarpetRegrid2::freeze_unaligned_levels		= "yes"
+CarpetRegrid2::freeze_unaligned_parent_levels	= "yes"
+CarpetRegrid2::snap_to_coarse		= "yes"
+
+#=========== Star 1 ========================
+
+CarpetRegrid2::active_1		= "yes"
+CarpetRegrid2::position_x_1		= 0.0
+
+CarpetRegrid2::num_levels_1 = 5
+CarpetRegrid2::radius_1[4]   = 15.0 
+CarpetRegrid2::radius_1[3]   = 30.0 
+CarpetRegrid2::radius_1[2]   = 60.0
+CarpetRegrid2::radius_1[1]   = 90.0 
+
+#===========================================
+########################## Time integration ######################
+ActiveThorns = "MoL Time"
+
+MoL::ODE_Method             = "RK3"
+MoL::MoL_Intermediate_Steps = 3
+MoL::initial_data_is_crap  ="yes"
+MoL::init_RHS_zero          = "yes"
+MoL::init_RHS2_zero          = "yes"
+MoL::MoL_Num_Scratch_Levels = 1
+MoL::verbose                = "register"
+
+InitBase::initial_data_setup_method     =       "init_all_levels"
+
+#Time::timestep_method		= "courant_static"
+Time::dtfac = 0.20
+
+MoL::Do_MoL_Extra_Evolution = yes
+
+##################################################################
+######################### Hydro ##################################
+
+# Illinois GRMHD
+##################################################
+ActiveThorns = "IllinoisGRMHD"
+ActiveThorns = "ID_converter_ILGRMHD"
+#============= Initial Data Import===========================
+
+#ID_converter_ILGRMHD::pure_hydro_run     = "yes"
+#ID_converter_ILGRMHD::rho_threshold      = 1.0e-8
+#ID_converter_ILGRMHD::adjust_mb          = "no"
+
+#============= IllinoisGRMHD evolution  =================================
+CarpetLib::support_staggered_operators           = "yes"
+IllinoisGRMHD::damp_lorenz                      = 1.0  # Etienne recommends less or equal 1.5/coarsest_timestep,  
+                                               # if much larger -> CFL violation on coarsest level!
+                                               # Giacomazzo recommends 2/M 
+
+IllinoisGRMHD::verbose			        = no
+IllinoisGRMHD::damp_lorenz_radius               = 90. 
+IllinoisGRMHD::use_lorenz_gauge                 = yes
+IllinoisGRMHD::c2p_adjust_cons                  = yes
+IllinoisGRMHD::lapse_excision                   = 0.05
+IllinoisGRMHD::c2p_Newton                       = yes
+IllinoisGRMHD::c2p_residual_tol                 = 1.e-9
+#IllinoisGRMHD::register_ADM_SandR               = no
+
+IllinoisGRMHD::Symmetry = "equatorial"
+ 
+##################################################
+# Equation of state
+##################################################
+ActiveThorns="Margherita_ID"
+ActiveThorns="Margherita_EOS"
+
+Margherita::rho_atm                             = 1.e-14
+Margherita::temp_atm                            = 0.01
+Margherita::tauenergy_min                       = 0.0
+###Margherita::temp_slice                          = 0.01
+Margherita::slice_is_isentropic			 = yes
+Margherita::entropy_slice			 = 1.0
+Margherita::eps_max                             = 1.e5
+Margherita::recompute_mu_nu                     = no
+
+#Margherita::Units                               = "geometrised"
+
+Margherita::nuceos_read_table = yes
+Margherita::nuceos_table_name = "/home/relastro-shared/EOS/scollapse/Hempel_DD2EOS_rho234_temp180_ye60_version_1.1_20120817.h5"
+Margherita::nuceos_table_type = "stellarcollapse"
+Margherita::downsample_num_points               = 1200
+Margherita::cold_table_num_points               = 500
+
+# Neutrinos
+
+ActiveThorns = "frankfurt_m1"
+
+frankfurt_m1::Radiation_BC      = "outflow"
+frankfurt_m1::couple_fluid 	  = 1.
+frankfurt_m1::couple_entropy	  = 1.
+frankfurt_m1::couple_ye	  	  = 1. 
+frankfurt_m1::evolve_radiation = yes
+
+frankfurt_m1::m1_which_eas = "microphysical-corrected"
+
+frankfurt_m1::verbosity		 = 0
+frankfurt_m1::E_atmo		 = 1e-14
+frankfurt_m1::N_atmo		 = 1e-14
+frankfurt_m1::M1_atmo_tol	 	 = 0.01
+frankfurt_m1::M1_rho_floor		 = 1e-10
+
+frankfurt_m1::m1_use_iteration_initguess = yes
+
+frankfurt_m1::Symmetry	       = "equatorial"
+
+ActiveThorns = "TestM1"
+TestM1::M1_WhichTest = "zero"
+
+########################### SpaceTime ##############################
+ActiveThorns = "ADMBase ADMCoupling ADMMacros CoordGauge SpaceMask StaticConformal TmunuBase InitBase"
+ActiveThorns = "GenericFD NewRad"
+SpaceMask::use_mask = yes
+
+TmunuBase::stress_energy_storage = yes
+TmunuBase::stress_energy_at_RHS  = yes
+TmunuBase::timelevels            = 1
+TmunuBase::prolongation_type     = "none"
+TmunuBase::support_old_CalcTmunu_mechanism = "no"
+
+ADMMacros::spatial_order = 4
+HydroBase::prolongation_type = "none"
+
+
+ActiveThorns = "NewRad Dissipation Boundary"
+ActiveThorns = "Antelope"
+
+ADMBase::evolution_method			= "Antelope"
+ADMBase::lapse_evolution_method			= "Antelope"
+ADMBase::shift_evolution_method			= "Antelope"
+ADMBase::dtlapse_evolution_method		= "Antelope"
+ADMBase::dtshift_evolution_method		= "Antelope"
+
+ADMBase::lapse_timelevels = 3
+ADMBase::shift_timelevels = 3
+ADMBase::metric_timelevels = 3
+
+ADMBase::metric_prolongation_type= "none"
+
+
+Antelope::eta = 0.05
+Antelope::kappa1 =0.04
+
+Antelope::eta_damp_radius = 50.
+Antelope::non_shifting_shift = yes
+
+Antelope::theta_damp_radius = 1.e99
+Antelope::kappa_damp_radius = 50.
+
+Antelope::import_Tmunu = no
+
+
+Boundary::radpower                      = 2
+
+Dissipation::order                      = 5
+Dissipation::epsdis                     = 0.2
+Dissipation::vars                       = "
+Antelope::conformal_factor
+Antelope::conformal_metric
+Antelope::curvature_scalar
+Antelope::Theta
+Antelope::curvature_tensor
+Antelope::Gamma
+Antelope::Gammadriver
+ADMBase::lapse
+ADMBase::shift
+"
+
+# =============================================================================
+# Initial data
+# =============================================================================
+
+ActiveThorns ="HydroBase"
+
+HydroBase::timelevels        = 3
+ADMBase::metric_type         ="physical"
+
+ActiveThorns = "SummationByParts"
+
+ActiveThorns="Hydro_RNSID"
+
+ADMBase::initial_data   = "hydro_rnsid"
+ADMBase::initial_lapse    = "hydro_rnsid"
+ADMBase::initial_shift    = "hydro_rnsid"
+ADMBase::initial_dtlapse    = "zero"
+ADMBase::initial_dtshift    = "zero"
+
+#Some changes below:
+HydroBase::initial_hydro          = "hydro_rnsid"
+HydroBase::initial_Y_e            = "Margherita"
+HydroBase::initial_temperature    = "Margherita"
+HydroBase::initial_entropy    = "Margherita"
+HydroBase::initial_Bvec    = "zero"
+HydroBase::initial_Avec    = "zero"
+HydroBase::initial_Aphi    = "zero"
+
+Hydro_rnsid::rho_central	= 0.00120
+Hydro_rnsid::axes_ratio		= 1.0
+Hydro_rnsid::rotation_type	= "uniform"
+
+Hydro_rnsid::eos_type           = "tab"
+Hydro_rnsid::eos_file           = "/home/relastro-shared/EOS/ColdTables/DD2_s1.rns"
+
+Hydro_rnsid::RNS_rho_min	= 1.e-14
+Hydro_rnsid::RNS_atmo_tolerance	= 1.e-2
+Hydro_rnsid::accuracy           = 1.e-10
+
+
+####################################################################
+ActiveThorns = "healpix"
+
+healpix::verbose          = yes
+healpix::verbose_register = yes
+healpix::num_slices  	  = 1
+
+healpix::slice_radius    [0] = 80
+healpix::slice_resolution[0] = 32
+
+
+healpix::output_every    = 2048
+healpix::integrate_every = 16
+
+healpix::interpolator         = "Lagrange polynomial interpolation"
+healpix::interpolator_options = "order=4"
+
+ActiveThorns = "M1_luminosities"
+
+M1_luminosities::num_detectors = 1
+
+M1_luminosities::det_id    [0] = 0
+
+M1_luminosities::compute_every = 128
+M1_luminosities::do_output     = yes
+M1_luminosities::output_extras = yes
+
+
+####################### NaNChecker ###################################
+
+ActiveThorns = "WatchDog"
+
+ActiveThorns = "NaNChecker"
+
+NaNChecker::check_every   = 16
+NaNChecker::check_vars    = "
+  ADMBase::metric
+  ADMBase::curv
+  ADMBase::lapse
+  IllinoisGRMHD::rho_star
+  IllinoisGRMHD::u0"
+NaNChecker::action_if_found   = "terminate"
+NaNChecker::verbose         = "standard"
+
+####################################################################
+
+
+#------SphericalSurface-----------------------
+
+ActiveThorns = "SphericalSurface"
+
+#SphericalSurface::nsurfaces             = 2
+#SphericalSurface::maxntheta             = 140
+#SphericalSurface::maxnphi               = 240
+
+#SphericalSurface::ntheta        [0]     = 55
+#SphericalSurface::nphi          [0]     = 96
+#SphericalSurface::nghoststheta  [0]     = 2
+#SphericalSurface::nghostsphi    [0]     = 2
+
+#SphericalSurface::ntheta        [1]     = 55
+#SphericalSurface::nphi          [1]     = 96
+#SphericalSurface::nghoststheta  [1]     = 2
+#SphericalSurface::nghostsphi    [1]     = 2
+
+############################# Output  ########################################
+
+##############################################################################
+
+ActiveThorns = "IOUtil HDF5"
+ActiveThorns = "CarpetIOASCII CarpetIOScalar CarpetIOHDF5 CarpetIOBasic"
+
+
+CarpetIOBasic::outInfo_reductions		= "norm2 maximum minimum"
+
+IOBasic::outInfo_vars       = "
+ADMBase::lapse
+Antelope::H
+frankfurt_m1::Enua{ reductions = 'maximum' }
+IllinoisGRMHD::rho_b{ reductions = 'maximum' }
+Carpet::physical_time_per_hour
+"
+
+CarpetIOScalar::outScalar_vars      = "
+				    Antelope::H{ reductions = 'maximum minimum norm2'}
+          admbase::lapse{ reductions = 'minimum'}
+          IllinoisGRMHD::rho_b{ reductions = 'maximum'}
+	  IllinoisGRMHD::temp{ reductions = 'minimum maximum'}
+	  IllinoisGRMHD::ye
+	  frankfurt_m1::Enue
+"			   
+
+CarpetIOASCII::out0D_vars	= "
+				M1_luminosities::neutrino_luminosities
+"
+#				OutflowIntegrals::volume_integrals
+#				OutflowIntegrals::surface_integrals
+
+
+CarpetIOHDF5::out1D_vars      = "
+#          Antelope::H
+#          ADMBase::lapse   
+#          ADMBase::shift
+#          IllinoisGRMHD::rho_b
+#          HydroBase::vel
+#          HydroBase::w_lorentz
+#          HydroBase::eps
+#          HydroBase::press 
+#          WeylScal4::Psi4r
+#          WeylScal4::Psi4i
+"
+
+CarpetIOHDF5::out2D_vars      = "
+          ADMBase::lapse
+          HydroBase::w_lorentz
+	  IllinoisGRMHD::s
+          IllinoisGRMHD::rho_b
+	  IllinoisGRMHD::temp
+	  IllinoisGRMHD::ye
+	  frankfurt_m1::Enue
+	  frankfurt_m1::Fnue_x
+	  frankfurt_m1::Fnue_y
+	  frankfurt_m1::Fnue_z
+	  frankfurt_m1::kappa_nue_a
+	  frankfurt_m1::Enua
+	  frankfurt_m1::Qnua
+	  frankfurt_m1::Enux
+	  frankfurt_m1::Enua_rhs
+	  frankfurt_m1::m1_heatcool
+	  frankfurt_m1::kappa_nua_a	  
+	  ADMBase::betax
+	  ADMBase::betay
+	  ADMBase::betaz
+	  Antelope::phi
+"
+
+CarpetIOHDF5::out3D_vars      = ""
+#    BNSAnalysis::dens_unbnd
+#    HydroBase::rho
+#    HydroBase::press
+#    HydroBase::temperature
+#    HydroBase::Y_e
+#    HydroBase::eps
+#    IllinoisGRMHD::rho_b
+#    IllinoisGRMHD::P
+#    IllinoisGRMHD::Bx
+#    IllinoisGRMHD::By
+#    IllinoisGRMHD::Bz
+#    MHD_Analysis::Bvec_norm
+
+#============= Info output =======================================
+CarpetIOBasic::outInfo_criterion              = "divisor"
+CarpetIOBasic::outInfo_every			= 16
+#=================================================================
+
+#============= Scalar and 0D output ==============================
+CarpetIOScalar::outScalar_criterion           = "divisor"
+CarpetIOScalar::outScalar_dir                 = "data_Scalar"
+CarpetIOScalar::outScalar_every               = 16
+CarpetIOScalar::outScalar_reductions          = "norm_inf minimum maximum norm1 norm2 average"
+
+CarpetIOASCII::out0D_criterion                = "divisor"
+CarpetIOASCII::out0D_dir                      = "data_asc_0D"
+CarpetIOASCII::out0D_every                    = 64
+
+#=================================================================
+
+#==================  Domain output  ==============================
+CarpetIOHDF5::out1D_criterion                 = "divisor"
+CarpetIOHDF5::out1D_dir                       = "data_hdf5_1D"
+CarpetIOHDF5::out1D_every                        = -1
+
+
+CarpetIOHDF5::out2D_criterion                 = "divisor"
+CarpetIOHDF5::out2D_dir                       = "data_hdf5_2D"
+CarpetIOHDF5::out2D_xz		              = yes
+CarpetIOHDF5::out2D_yz		              = yes
+CarpetIOHDF5::out2D_xy			      = yes
+CarpetIOHDF5::out2D_every                     = 512 ## .1 ms  #war 1024
+
+
+CarpetIOHDF5::out3D_criterion                    = "divisor"
+CarpetIOHDF5::out3D_dir                          = "data_hdf5_3D"
+CarpetIOHDF5::out3D_every                        = -1
+#=================================================================
+
+#==================  General output settings =======================
+IOUtil::strict_io_parameter_check = "yes"
+IOUtil::parfile_write             = "copy"
+
+# To reduce the number of files 0n the output directory
+CarpetIOScalar::all_reductions_in_one_file    = "no"
+CarpetIOScalar::one_file_per_group            = "no"
+CarpetIOASCII::one_file_per_group             = "no"
+CarpetIOHDF5::one_file_per_group              = "no"
+#IO::out_single_precision                = "yes" #FIXME Check the performance impact of this!
+
+# To reduce the size of files (Caution, it might reduce the speed a little bit):
+#CarpetIOHDF5::compression_level               = 1
+
+# Output an index file for each output file
+#CarpetIOHDF5::output_index        = "no"
+#=================================================================
+
+##########################################################################
+

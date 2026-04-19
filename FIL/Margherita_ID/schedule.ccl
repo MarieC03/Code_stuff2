@@ -1,0 +1,16 @@
+# Schedule definitions for thorn ID_converter_ILGRMHD
+
+STORAGE: HydroBase::rho[1],HydroBase::press[1],HydroBase::eps[1],HydroBase::vel[1],HydroBase::Bvec[1],HydroBase::Avec[1],HydroBase::Aphi[1]
+STORAGE: HydroBase::temperature[1], HydroBase::Y_e[1], HydroBase::entropy[1]
+
+schedule group Margherita_ID at CCTK_INITIAL after HydroBase_Initial before HydroBase_Prim2ConInitial
+{
+} "Margherita ID completion"
+
+schedule fix_ID IN Margherita_ID
+{
+   LANG:       C
+   OPTIONS:   LOCAL  #GLOBAL LOOP-LOCAL #LOCAL
+} "Complete ID, e.g. electron fraction from beta equilibrium"
+
+

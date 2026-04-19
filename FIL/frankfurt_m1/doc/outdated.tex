@@ -1,0 +1,205 @@
+% *======================================================================*
+%  Cactus Thorn template for ThornGuide documentation
+%  Author: Ian Kelley
+%  Date: Sun Jun 02, 2002
+%  $Header$
+%
+%  Thorn documentation in the latex file doc/documentation.tex
+%  will be included in ThornGuides built with the Cactus make system.
+%  The scripts employed by the make system automatically include
+%  pages about variables, parameters and scheduling parsed from the
+%  relevant thorn CCL files.
+%
+%  This template contains guidelines which help to assure that your
+%  documentation will be correctly added to ThornGuides. More
+%  information is available in the Cactus UsersGuide.
+%
+%  Guidelines:
+%   - Do not change anything before the line
+%       % START CACTUS THORNGUIDE",
+%     except for filling in the title, author, date, etc. fields.
+%        - Each of these fields should only be on ONE line.
+%        - Author names should be separated with a \\ or a comma.
+%   - You can define your own macros, but they must appear after
+%     the START CACTUS THORNGUIDE line, and must not redefine standard
+%     latex commands.
+%   - To avoid name clashes with other thorns, 'labels', 'citations',
+%     'references', and 'image' names should conform to the following
+%     convention:
+%       ARRANGEMENT_THORN_LABEL
+%     For example, an image wave.eps in the arrangement CactusWave and
+%     thorn WaveToyC should be renamed to CactusWave_WaveToyC_wave.eps
+%   - Graphics should only be included using the graphicx package.
+%     More specifically, with the "\includegraphics" command.  Do
+%     not specify any graphic file extensions in your .tex file. This
+%     will allow us to create a PDF version of the ThornGuide
+%     via pdflatex.
+%   - References should be included with the latex "\bibitem" command.
+%   - Use \begin{abstract}...\end{abstract} instead of \abstract{...}
+%   - Do not use \appendix, instead include any appendices you need as
+%     standard sections.
+%   - For the benefit of our Perl scripts, and for future extensions,
+%     please use simple latex.
+%
+% *======================================================================*
+%
+% Example of including a graphic image:
+%    \begin{figure}[ht]
+% 	\begin{center}
+%    	   \includegraphics[width=6cm]{MyArrangement_MyThorn_MyFigure}
+% 	\end{center}
+% 	\caption{Illustration of this and that}
+% 	\label{MyArrangement_MyThorn_MyLabel}
+%    \end{figure}
+%
+% Example of using a label:
+%   \label{MyArrangement_MyThorn_MyLabel}
+%
+% Example of a citation:
+%    \cite{MyArrangement_MyThorn_Author99}
+%
+% Example of including a reference
+%   \bibitem{MyArrangement_MyThorn_Author99}
+%   {J. Author, {\em The Title of the Book, Journal, or periodical}, 1 (1999),
+%   1--16. {\tt http://www.nowhere.com/}}
+%
+% *======================================================================*
+
+% If you are using CVS use this line to give version information
+% $Header$
+
+\documentclass{article}
+
+% Use the Cactus ThornGuide style file
+% (Automatically used from Cactus distribution, if you have a
+%  thorn without the Cactus Flesh download this from the Cactus
+%  homepage at www.cactuscode.org)
+\usepackage{../../../../doc/latex/cactus}
+
+\begin{document}
+
+% The author of the documentation
+\author{Musolino, Carlo}
+
+% The title of the document (not necessarily the name of the Thorn)
+\title{frankfurt-m1}
+
+% the date your document was last changed, if your document is in CVS,
+% please use:
+%    \date{$ $Date$ $}
+% when using git instead record the commit ID:
+%    \date{\gitrevision{<path-to-your-.git-directory>}}
+\date{June 22nd 2022}
+
+\maketitle
+
+% Do not delete next line
+% START CACTUS THORNGUIDE
+
+% Add all definitions used in this documentation here
+%   \def\mydef etc
+
+% Add an abstract for this thorn's documentation
+\begin{abstract}
+frankfurt_m1 is a moment-based neutrino scheme designed for use with the Frankfurt arrangement in the Einstein Toolkit. In particular, this means that it's designed to run in conjunction with Antelope and Frankfurt-IllinoisGRMHD.
+\end{abstract}
+
+% The following sections are suggestive only.
+% Remove them or add your own.
+
+\section{Introduction}
+
+frankfurt_m1 is a neutrino code based on the moment formalism of \cite{FIM1_FIL_M1_ShibataMoments}. It evolves the first two moments of the radiation specific intensity integrated over the energy. As such, it is a grey scheme. It supports the evolution of neutrinos modelled as three effective species: the electron neutrinos $\nu_e$, antineutrinos $\bar{\nu}_e$ and the effective heavy lepton neutrino species $\nu_x$ (which incorporates $\nu_\mu$,$\bar{\nu}_\mu$,$\nu_\tau$,$\bar{\nu}_\tau$).
+The coupling with the GRMHD fluid requires the knowledge of microphysical transport rates ( emissivities, opacities ) which are computed mostly by following the seminal work of \cite{FILM1_FIL_M1_Ruffert1996}. The advantage of a moment scheme over a simpler leakage-based scheme is that it allows to simulate  the radiation accurately in the free streaming regime, thus leading to better estimates for the neutrino luminosity in the simulations. Moreover, since the energy flux of neutrinos is evolved, the M1 scheme allows for a natural incorporation of the effect of neutrino reabsorption, which is crucial for correctly capturing the electron fraction distribution of compact binary coalescence's ejected matter.
+M1 also models regions where radiation is neither free nor completely coupled to the GRMHD fluid. This is achieved via a closure relation on the pressure tensor to be detailed below.
+
+\section{Physical System}
+
+\section{Numerical Implementation}
+
+The equations of the M1 scheme are written in conservative form for the Energy and Energy Flux densities of neutrinos. Therefore the numerical scheme employed for their solution is extremely similar to a standard HRSC scheme employed for the solution of GR hydrodynamics system. The caveats here are essentially two: firstly, to obtain the pressure tensor for the radiation the closure must be computed, as we'll see shortly, this involves 1-D rootfinding. Moreover, the collisional source terms in the radiation evolution equations are likely to become stiff in the optically thick regions of the simulation domain. This means that the equations must be treated implicitly to maintain accurate solutions while employing reasonable timestep sizes. Two implicit time-stepping schemes were developed in the ETK for the purpose of the M1 scheme: a 2nd order and a 3rd order IMEX schemes. Finally, the computation of the collisional (implicit) source terms also requires rootfinding (this time in 4 dimensions!). This aspect is possibly one of the most delicate parts of the M1 algorithm.
+A timestep in Fil-M1 proceeds as follows:
+\begin{enumerate}
+\item First, based on the three independent thermodynamic variables of the GRMHD fluid ($\rho$,$T$,$Y_e$), the microphysical transport rates are computed according to analytical formulas
+\item Then the RHS for the conservation equations is computed by adding the geometrical source terms and the flux derivatives. In particular:
+  \begin{itemize}
+  \item The closure is updated and the pressure tensor recomputed.
+  \item the primitive variables are reconstructed to the cell faces. Note that for better maintaining causality of the fluxes, the actual reconstructed variables are ($E$,$F^i/E$). Currently, the reconstruction employs a 5-th order WENO scheme.
+  \item The fluxes are then computed via an hll riemann solver. To correctly reproduce the asymptotically opaque behaviour of the radiation fields, a correction is applied to the fluxes at this stage.
+  \item Finally the flux are derived and the result is added to the geometrical source terms. This is currently done with a 4-th order 5-point stencil for the derivatives.
+  \end{itemize}
+\item The explicit part of the IMEX timestep is now performed by MoL.
+\item Finally, we need to compute the collisional source terms (implicitly) and perform the implicit update on the evolved variables. This is done by default through a 4-D Newton-type rootfinding algorithm. Throughtout the iterations, the fluid variables (in particular the velocity) are kept fixed, but all the radiation variables are left free to vary by default. This implies that the closure and the pressure are recomputed for each iteration of the rootfinder. This procedure has 2 limitations: firstly it is fairly slow, and secondly the rootfinder is subject to failures (especially for high lorentz factor). To deal with the first problem, M1 is equipped with the possibility of replacing the full rootfinder with its first order Taylor expansion (see \cite{FILM1_FIL_M1_Weih2020}) in optically thin regions far enough from the central object. To deal with the second problem, we allow for backup iteration with an analogous rootfinder where the closure is kept fixed to a completely optically thick value. The rootfinder is also set to start by default from an initial guess ( see \cite{FILM1_FIL_M1_RadiceM1} for details) that corresponds to  the first order in $v/c$ solution and which improves substantially the convergence properties, especially in critical regions of the domain where the density is rather low and the velocity pretty large. Finally, the collisional sources are neglected where the GRMHD fluid density falls below a user-specified floor (which usually coincides with the Hydro atmosphere + some buffer). 
+\end{enumerate}
+
+\section{Using This Thorn}
+
+This thorn is designed to be used with the Frankfurt Numerical Relativity software base. As such, you need IllinoisGRMHD and Antelope in your ETK configuration  to run M1. Moreover, the diagnostics companion thorn which computes neutrino luminosities also requires the SphericalIntegrators thorn. Also be mindful of the fact that in the writing of this thorn several modifications where required for IllinoisGRMHD, MoL, SphericalIntegrators and Margherita_EOS. For this  reason, please use the version of these codes that was distributed to you together with M1.
+For running M1 you need a few modifications to your standard parfile. First of all, make sure you have at least 4 ghostzone points since M1 employs a 4th-order accurate spatial derivative stencil (as does Fil, by the way).
+M1 imposes a significant restriction on the time integration routine that can be used. In particular, we need an Implicit-Explicit scheme to handle the stiff collisional sources. There are two such schemes implemented in the version of MoL that was provided with this thorn (NOT In the public version!).
+You can choose between a 2nd order accurate and a third order accurate IMEX scheme, below I give an example of the MoL section of your parfile for both:
+\begin{verbatim}
+ActiveThorns="MoL Time"
+
+MoL::init_RHS_zero        = yes
+MoL::init_RHS2_zero       = yes
+MoL::initial_data_is_crap = yes
+
+MoL::ODE_Method             = "IMEX2" ## IMEX3
+MoL::MoL_Intermediate_Steps = 3 ## 4
+MoL::MoL_Num_Scratch_Levels = 1 ## 3
+
+MoL::verbose = "register"
+
+Time::dtfac  = 0.15 ## with IMEX3 you can usually get away with .2
+\end{verbatim}
+As you can see, the third order has steeper memory requirements than the 2nd order scheme (although you shouldn't be fooled by the numbers you see, a different implementation strategy in IMEX3 means that we don't use weird timelevels tricks when handling the scratchspace thus requiring more scratch levels) but relieves the very stringent timestep requirements associated with using a low order time scheme, play around with it, let me know what you find.
+
+For what concerns IllinoisGRMHD itself, the only special parameter you need to set is
+\begin{verbatim}
+IllinoisGRMHD::m1_run = yes
+\end{verbatim}
+Which enables storage for the collisional source terms.
+
+The M1 part of the parfile itself will look something like this:
+\begin{verbatim}
+ActiveThorns="FIL_M1"
+
+FIL_M1::evolve_radiation = yes
+
+FIL_M1::E_atmo            = 5e-15
+FIL_M1::M1_atmo_tolerance = 0.1
+FIL_M1::speed_eps         = 1e-04
+
+FIL_M1::use_full_rootfinding  = yes
+FIL_M1::use_backup_rootinding = yes
+
+FIL_M1::M1_rho_floor          = 1e-12
+FIL_M1::radius_linear_sources =  40
+\end{verbatim}
+
+\subsection{Basic Usage}
+
+
+\subsection{Examples}
+
+\subsection{Support and Feedback}
+Please email the main author and maintainer of this code for any questions-comments at: \href{mailto:musolino@itp.uni-frankfurt.de}{musolino@itp.uni-frankfurt.de} .
+
+\section{History}
+
+\subsection{Thorn Source Code}
+
+\subsection{Thorn Documentation}
+
+\subsection{Acknowledgements}
+
+
+\begin{thebibliography}{9}
+
+\end{thebibliography}
+
+% Do not delete next line
+% END CACTUS THORNGUIDE
+
+\end{document}

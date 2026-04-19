@@ -1,0 +1,4 @@
+F90=/mnt/beegfs/IntelHDF5/hdf5-1.10.3/bin/h5pfc
+FFLAGS = -c
+F90FLAGS = -xHost -O3 -FR -implicitnone
+LINK= $(F90)  $(F90FLAGS)

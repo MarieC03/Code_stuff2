@@ -1,0 +1,185 @@
+# Scheduler setup for frankfurt_m1
+STORAGE: m1_conservatives_scalars[3],m1_conservatives_vectors_nue[3], 
+	m1_conservatives_vectors_nue_bar[3], m1_conservatives_vectors_numu[3], 
+	m1_conservatives_vectors_numu_bar[3], m1_conservatives_vectors_nux[3]
+STORAGE: m1_primitives_scalars, m1_primitives_vectors_nue, m1_primitives_vectors_nue_bar, m1_primitives_vectors_numu, m1_primitives_vectors_numu_bar, m1_primitives_vectors_nux
+STORAGE: m1_conservatives_scalars_rhs, m1_conservatives_vectors_nue_rhs, m1_conservatives_vectors_nue_bar_rhs, 
+	m1_conservatives_vectors_numu_rhs, m1_conservatives_vectors_numu_bar_rhs, m1_conservatives_vectors_nux_rhs
+STORAGE: m1_heatcool, m1_e_lepton_source, m1_mu_lepton_source, m1_entropy_source, eta_neutrino
+
+
+STORAGE: implicit_stats
+STORAGE: PUPmunu_neutrino, zeta_neutrino
+STORAGE: neutrino_emissivity, neutrino_opacities
+STORAGE: neutrino_avg_energy 
+STORAGE: frankfurt_m1_rhs_species
+STORAGE: RK_counter
+STORAGE: m1_diagnostics
+STORAGE: neutrino_flux_temps, neutrino_fluxLO_temps, m1_primitives_reconstructed_temps
+
+
+schedule frankfurt_m1_paramcheck at PARAMCHECK
+{
+ lang: C
+ options: global
+} "Check parameters"
+
+schedule frankfurt_m1_register_vars in MoL_Register
+{
+  LANG: C
+  OPTIONS: META
+} "Register constrained variables in frankfurt_m1 for MoL"
+
+# Tells the symmetry thorn how to apply symmetries on each gridfunction:
+schedule frankfurt_m1_set_symmetries at BASEGRID after Lapse_InitSymBound
+{
+  LANG: C
+  OPTIONS: global
+} "Register symmetries"
+
+####################
+
+########################################
+# Initial set up of conservative variables
+########################################
+
+schedule frankfurt_m1_prims_to_conservs__initial in HydroBase_Prim2ConInitial
+{
+  LANG: C
+} "Initial computation of the conservatives"
+
+
+################################################################################
+# Post initial scheduling: Initialise symmetries, then recompute primitives 
+################################################################################
+
+schedule GROUP frankfurt_m1_PostPostInitial at CCTK_POSTPOSTINITIAL before MoL_PostStep after HydroBase_Con2Prim
+{
+} "HydroBase_Con2Prim in CCTK_POSTPOSTINITIAL sets conserv to prim then outer boundaries (OBs, which are technically disabled). The post OB SYNCs actually reprolongate the conservative variables, making cons and prims INCONSISTENT. So here we redo the con2prim, avoiding the SYNC afterward, then copy the result to other timelevels"
+
+schedule frankfurt_m1_conservs_to_prims in frankfurt_m1_PostPostInitial as c2p after compute_b
+{  
+  LANG: C
+} "Convert conservatives to primitives and enforce atmosphere conditions"
+
+schedule frankfurt_m1_PostPostInitial_Set_Symmetries__Copy_Timelevels in frankfurt_m1_PostPostInitial as m1postid after compute_b after c2p
+{
+  LANG: C
+} "Compute post-initialdata quantities"
+
+####################
+
+#if(evolve_radiation) {
+
+#Get the microphysics
+schedule frankfurt_m1_compute_eas as M1_eas in frankfurt_m1_PostPostInitial after m1postid
+{
+  LANG: C
+  READS: IllinoisGRMHD::rho_b(Everywhere)
+  READS: IllinoisGRMHD::temp(Everywhere)
+  READS: IllinoisGRMHD::ye(Everywhere)
+  READS: IllinoisGRMHD::ymu(Everywhere)
+} "Compute emissivity and opacities"
+
+####################
+# UPDATE STRATEGY: WE USE STRANG SPLITTING TO GET 2nd order 
+
+schedule group frankfirt_m1_implicit at CCTK_EVOL after MoL_Evolution 
+{
+} "Group for M1 implicit RHS"
+
+schedule frankfurt_m1_evaluate_collisional_rhs in frankfirt_m1_implicit 
+{ 
+  lang: C
+} "Compute collisional source terms and perform implicit update"
+
+schedule group HydroBase_Boundaries in frankfirt_m1_implicit after frankfurt_m1_evaluate_collisional_rhs
+{
+} "c2p and hydro boundaries after radiation step"
+
+schedule group SetTmunu in frankfirt_m1_implicit after HydroBase_Boundaries
+{
+} "c2p and hydro boundaries after radiation step"
+
+####################
+# RHS EVALUATION
+
+schedule frankfurt_m1_init_rhs_counter in MoL_CalcRHS before frankfurt_m1_rhs after IllinoisGRMHD_RHS_eval
+{
+  lang: C
+  options: level
+} "Initialise species counter" 
+
+schedule group frankfurt_m1_rhs in MoL_CalcRHS after IllinoisGRMHD_RHS_eval while frankfurt_m1::frankfurt_m1_rhs_species
+{
+} "Compute explicit RHS of M1 equations"
+
+schedule frankfurt_m1_calc_rhs in frankfurt_m1_rhs
+{
+ lang: C
+} "Compute rhss for one species"
+
+schedule frankfurt_m1_decrease_rhs_counter in frankfurt_m1_rhs after frankfurt_m1_calc_rhs
+{
+ lang: C
+ options: level
+} "Decrease species counter"
+
+####################
+#Get the microphysics
+schedule frankfurt_m1_compute_eas as M1_eas at CCTK_EVOL after MoL_Evolution
+ {
+   LANG: C
+   READS: IllinoisGRMHD::rho_b(Everywhere)
+   READS: IllinoisGRMHD::temp(Everywhere)
+   READS: IllinoisGRMHD::ye(Everywhere)
+   READS: IllinoisGRMHD::ymu(Everywhere)
+ } "Compute emissivity and opacities"
+
+
+
+#} #if evolve_radiation
+
+########################################
+# Post-Step : Symmetries BCs and C2P
+########################################
+
+schedule group fm1_PostStep in HydroBase_Boundaries after AddToTmunu
+{
+} "Group for c2p and boundaries"
+
+schedule group frankfurt_m1_BC_group in fm1_PostStep
+{
+} "Group for BC registration-application"
+
+schedule frankfurt_m1_select_BCs in frankfurt_m1_BC_group as M1_Boundary_SYNCs
+{
+  SYNC: m1_conservatives_scalars,m1_conservatives_vectors_nue, m1_conservatives_vectors_nue_bar, m1_conservatives_vectors_numu, m1_conservatives_vectors_numu_bar, m1_conservatives_vectors_nux
+  LANG: C
+  OPTIONS: SINGLEMAP
+} "Register BCs -- Actually just a placeholder function to ensure prolongations / processor syncs are done BEFORE outer boundaries are updated."
+
+schedule group ApplyBCs as frankfurt_m1_ApplyBCs in frankfurt_m1_BC_group after M1_Boundary_SYNCs
+{
+  LANG: C
+} "Apply outflow-only, flat BCs"
+
+schedule frankfurt_m1_conservs_to_prims in fm1_PostStep as M1_c2p after frankfurt_m1_BC_group
+{
+ LANG: C
+} "Check atmosphere conditions / excision / acausal fluxes" 
+
+schedule  at CCTK_ANALYSIS
+{ 
+ LANG: C
+} "M1_diagnostics: mu_delta / tau_nu"
+
+schedule group M1_InitialData AT CCTK_INITIAL AFTER HydrobBase_Initial
+BEFORE HydroBase_Prim2ConInitial {
+} "Group for Neutrino initial data"
+
+schedule m1_set_initial in M1_InitialData as M1_ID
+{
+  lang: C
+} "Initialize neutrino variables to zero"
+

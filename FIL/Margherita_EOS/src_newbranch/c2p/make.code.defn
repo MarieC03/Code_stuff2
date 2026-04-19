@@ -1,0 +1,2 @@
+SRCS = register_c2p.C margherita_c2p.cc 
+SUBDIRS = 

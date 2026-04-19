@@ -1,0 +1,116 @@
+This document describes the use of Python for plotting B\+H\+AC 1D and 2D simulation data. {\itshape The Python tools were initiated by Oliver Porth.}
+
+The Python macros are located in the directory {\ttfamily tools/python} and depend on \href{http://www.vtk.org}{\tt V\+TK}-\/bindings and the widespread \href{http://www.scipy.org/}{\tt Sci\+Py} toolkit.\hypertarget{index_Installation}{}\section{Installation}\label{index_Installation}
+\hypertarget{index_distribution}{}\subsection{Python distribution}\label{index_distribution}
+If you are a beginner at Python, we recommend using a pre-\/configured python-\/distribution such as \href{https://store.enthought.com/#canopy-academic}{\tt Enthought Canopy}. Note that for V\+TK support you will need to sign up for the free academic version. This distribution comes with \href{http://www.scipy.org/}{\tt Sci\+Py} which bundles essential numerical tools (\href{http://www.numpy.org/}{\tt numpy}), a plotting backend (\href{http://matplotlib.org/}{\tt matplotlib}) and a command-\/line interface called \href{http://ipython.org/}{\tt I\+Python} for interactive use.
+
+Often, a simple 
+\begin{DoxyCode}
+pip install vtk --user
+\end{DoxyCode}
+ does the trick.
+
+You can verify your V\+TK installation by trying to {\ttfamily import vtk} in a Python session. If V\+TK is installed properly, this should throw no error messages.\hypertarget{index_BHAC-Tools}{}\subsection{B\+H\+A\+C-\/\+Tools}\label{index_BHAC-Tools}
+The tools are installed by adding the directory {\ttfamily \$\+B\+H\+A\+C\+\_\+\+D\+IR/tools/python} to your python path. This can be done in a number of ways. Either you expand your {\ttfamily \$\+P\+Y\+T\+H\+O\+N\+P\+A\+TH} environment variable, e.\+g. on the bash shell\+:
+
+
+\begin{DoxyCode}
+export PYTHONPATH = $BHAC\_DIR/tools/python:$PYTHONPATH
+\end{DoxyCode}
+
+
+or you add a file {\itshape userpath.\+pth} in one of the folders existing in the search path already. The file simply contains
+
+
+\begin{DoxyCode}
+youramrvacdir/tools/python
+\end{DoxyCode}
+
+
+where {\itshape youramrvacdir} has to be the resolved variable {\ttfamily \$\+B\+H\+A\+C\+\_\+\+D\+IR}, e.\+g. {\ttfamily /\+Users/\+Max/code/amrvac}. For example on a mac, you can add the userpath.\+pth to the directory {\ttfamily /\+Library/\+Frameworks/\+Python.framework/\+Versions/\+Current/lib/python2.\+7/site-\/packages} or similar.\hypertarget{index_reading}{}\section{Reading data}\label{index_reading}
+We currently support reading the {\bfseries cell-\/centered} V\+TK file-\/types {\ttfamily .vtu, .pvtu, .vti} as well as binary particle {\ttfamily .dat} files and some ascii {\ttfamily .csv} files for Python. This means that you can use the same files with e.\+g. Paraview or Visit. These can be created in parallel and during runtime (see also the section on data-\/file \href{../convert.html}{\tt conversion}). Reading data is handled in the file ready.\+py which provides various classes for different data.
+
+For interactive use with the terminal, cd to the directory containing your data and fire up ipython\+: 
+\begin{DoxyCode}
+ipython --pylab
+\end{DoxyCode}
+ Import the reader and plotter classes\+: 
+\begin{DoxyCode}
+>>> import read,amrplot
+\end{DoxyCode}
+ \hypertarget{index_vtu}{}\subsection{vtu and pvtu files}\label{index_vtu}
+This uses the class \hyperlink{classread_1_1load}{read.\+load}.
+
+Interactively load the data\+: 
+\begin{DoxyCode}
+>>> d=read.load(offset,file='data',type='vtu')  
+\end{DoxyCode}
+ which loads data\textquotesingle{}offset\textquotesingle{}.vtu, where offset is zero-\/padded to four digits (e.\+g. 0010). The data is contained in the instance {\ttfamily d}. Thus {\ttfamily d.\+rho} holds the numpy-\/array of the density, {\ttfamily d.\+v1} hols the first component of velocity (assuming your data is in primitive quantities and your velocity variable is called \textquotesingle{}{\ttfamily v1}\textquotesingle{}) and so on. To load a different snapshot into the instance {\ttfamily e}, type 
+\begin{DoxyCode}
+>>> e=read.load(DifferentOffset,file='data',type='vtu') 
+\end{DoxyCode}
+ In order to load a file ending in {\ttfamily .pvtu}, change the attribute of the optional parameter type to {\ttfamily type=\textquotesingle{}pvtu\textquotesingle{}}. The default is currently {\ttfamily type=\textquotesingle{}vtu\textquotesingle{}}.\hypertarget{index_vti}{}\subsection{vti files}\label{index_vti}
+This uses the class \hyperlink{classread_1_1loadvti}{read.\+loadvti}. For uniform {\ttfamily .vti} files, you can use 
+\begin{DoxyCode}
+>>> d=read.loadvti(offset,file='data')
+\end{DoxyCode}
+\hypertarget{index_particles}{}\subsection{Particle dat files}\label{index_particles}
+This uses the class \hyperlink{classread_1_1particles}{read.\+particles}. Type 
+\begin{DoxyCode}
+>>> d=read.particles(offset,file='data')
+\end{DoxyCode}
+ to import the particle snapshot data into python.\hypertarget{index_ensemble}{}\subsection{Particle csv files}\label{index_ensemble}
+This uses the class \hyperlink{classread_1_1ensemble}{read.\+ensemble} to load particle ensemble comma separated value files. Type 
+\begin{DoxyCode}
+>>> d=read.ensemble(offset, file='data0000', npayload=1)
+\end{DoxyCode}
+ to load file {\ttfamily data0000\+\_\+ensemble}{\itshape offset}{\ttfamily .csv} where {\itshape offset} is zero padded to six digits. {\ttfamily npayload} stands for the number of payload arrays in your data (default is one). We have two running indices in the output files, where the first {\ttfamily data0000} describes the fluid snapshot (e.\+g. useful when adding particles to a frozen snaphot) and the second {\ttfamily offset} denotes the particle ensemble snapshot number.\hypertarget{index_slice}{}\subsection{Slice csv files}\label{index_slice}
+To load a 1D slice in {\ttfamily .csv} format from a 2D simulation, you can use the class \hyperlink{classread_1_1loadcsv}{read.\+loadcsv} 
+\begin{DoxyCode}
+>>> d=read.loadcsv(offset,get=1,file='data',dir=1,coord=0.)
+\end{DoxyCode}
+ which loads file {\ttfamily data\+\_\+d}{\itshape dir}{\ttfamily \+\_\+x}{\itshape coord}\+\_\+n{\itshape offset}{\ttfamily .csv}, e.\+g. {\ttfamily data\+\_\+d1\+\_\+x+0.00\+D00\+\_\+n0000.\+csv}.\hypertarget{index_plotting}{}\section{Plotting data}\label{index_plotting}
+\hypertarget{index_onedplots}{}\subsection{1\+D plotting}\label{index_onedplots}
+Once the data is loaded into the instance {\ttfamily d}, you can access it with {\ttfamily d.\+varname} where {\ttfamily varname} is a variable name chosen in your A\+M\+R\+V\+AC parameter-\/file. Pythons powerful introspectrion makes it real easy to see whats available in the data\+: just type {\ttfamily d.} and hit the {\itshape tab} key to see whats available. For uniform data ({\ttfamily .vti}), the arithmetic center of the cells can be obtained via the command 
+\begin{DoxyCode}
+>>> d.getCenterPoints()
+\end{DoxyCode}
+ see \hyperlink{classread_1_1load_abd18004cdc081e7244548387dc7f6b4c}{read.\+load.\+get\+Center\+Points} for implemetation details. Thus you can make a simple 1D plot using matplotlib 
+\begin{DoxyCode}
+>>> plot(d.getCenterPoints(),d.rho,'k-+')
+\end{DoxyCode}
+ in solid (\textquotesingle{}{\ttfamily -\/}\textquotesingle{}) black (\textquotesingle{}{\ttfamily k}\textquotesingle{}) with \textquotesingle{}{\ttfamily +}\textquotesingle{} symbols. At this point {\ttfamily d.\+get\+Center\+Points()} and {\ttfamily d.\+rho} are simply numpy arrays so you can use all of \href{http://matplotlib.org/contents.html}{\tt matplotlib} for your plotting experience.
+
+For the structured {\ttfamily .vti} files, the attribute \hyperlink{classread_1_1loadvti_ad8a6fdb88386dce051cdade16bf426a1}{read.\+loadvti.\+x} (or .y or .z) denotes the cell center coordinate, such that a plot would be obtained with 
+\begin{DoxyCode}
+>>> plot(d.x,d.rho,'k-+')
+\end{DoxyCode}
+\hypertarget{index_twodplots}{}\subsection{2\+D plotting}\label{index_twodplots}
+The module \hyperlink{namespaceamrplot}{amrplot} contains plotting tools for 2D A\+MR data. These come in two flavours\+: the class \hyperlink{classamrplot_1_1polyplot}{amrplot.\+polyplot} to show each cell in one patch and the class \hyperlink{classamrplot_1_1rgplot}{amrplot.\+rgplot} to show data interpolated onto a uniform mesh. Other than that, both classes offer the same functionality. To display a 2D image of the density in your datastructure {\ttfamily d}, invoke a new instance 
+\begin{DoxyCode}
+>>> p1=amrplot.polyplot(d.rho,d)
+\end{DoxyCode}
+ which opens a new window containing your data. Drawing a window for the first time might take a few seconds as a list of the cell patches has to be generated. You can re-\/plot another quantity (e.\+g. temperature $\sim$p/rho) in this window with the command 
+\begin{DoxyCode}
+>>> p1.show(d.p/d.rho,d)
+\end{DoxyCode}
+ \hyperlink{classamrplot_1_1polyplot}{amrplot.\+polyplot} has several convenient members, for example you can save your image to a file using \hyperlink{classamrplot_1_1polyplot_a7e289ef0020a669b88ce755f8efb1b55}{amrplot.\+polyplot.\+save} which takes the filename as a parameter. The A\+MR blocks can be displayed by setting the attribute 
+\begin{DoxyCode}
+>>> p1.blocks=1
+\end{DoxyCode}
+ which can be switched off by setting \hyperlink{classamrplot_1_1polyplot_a81c5cd47348d2861c881942d2999d193}{amrplot.\+polyplot.\+blocks} back to {\ttfamily None}. You can fix the axis-\/range with the attributes \hyperlink{classamrplot_1_1polyplot_ab2e85991ae46edf094b98591597e6f87}{amrplot.\+polyplot.\+xrange} and \hyperlink{classamrplot_1_1polyplot_ac8b059832edba2155f81adde51acecd5}{amrplot.\+polyplot.\+yrange} and fix the window zoom by setting \hyperlink{classamrplot_1_1polyplot_aa4653b545c07e2a4ed7f0f61bf45e85f}{amrplot.\+polyplot.\+fixzoom} to a value other than {\ttfamily None}.
+
+The method \hyperlink{classamrplot_1_1polyplot_af40653c737fcd78dc956ac51a5a2ac9a}{amrplot.\+polyplot.\+onkey} allows you to inspect a location in your data\+: use the middle mouse button to mark a cell in your plotting window, then a pink crosshair will be displayed and the flow variables at chosen location are returned to the terminal.\hypertarget{index_convenience}{}\subsubsection{Auxiliary functions}\label{index_convenience}
+Some auxiliary functions you might find useful\+:
+\begin{DoxyItemize}
+\item amrplot.\+line selects flow variables over a straight path across your 2D slice
+\item \hyperlink{namespaceamrplot_ae376991fb7aa92c1e8a41501d7910479}{amrplot.\+velovect} provides \char`\"{}velocity vectors\char`\"{} for a flow field
+\item \hyperlink{namespaceamrplot_a6c85688725768d179b09bc02dffca0f3}{amrplot.\+contour} overlays contours onto your plotting window
+\item \hyperlink{namespaceamrplot_afd42022e288c73e942784cf1207fa538}{amrplot.\+streamlines} shows streamlines of a vector field
+\item \hyperlink{namespaceamrplot_a214eccffe1d56a25d80925cc453f5a23}{amrplot.\+streamline} plots a single streamline with given starting value
+\end{DoxyItemize}\hypertarget{index_doc}{}\section{Making this documentation}\label{index_doc}
+This documentation is created using \href{https://github.com/Feneric/doxypypy}{\tt doxypypy} and the documentation system \href{http:www.doxygen.org}{\tt Doxygen}. Simply run 
+\begin{DoxyCode}
+./makedoc
+\end{DoxyCode}
+ in the {\ttfamily \$\+B\+H\+A\+C\+\_\+\+D\+IR/tools/python} folder to re-\/generate the documentation. 

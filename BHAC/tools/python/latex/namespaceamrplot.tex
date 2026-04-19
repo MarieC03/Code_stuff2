@@ -1,0 +1,330 @@
+\hypertarget{namespaceamrplot}{}\section{amrplot Namespace Reference}
+\label{namespaceamrplot}\index{amrplot@{amrplot}}
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{classamrplot_1_1polyplot}{polyplot}
+\begin{DoxyCompactList}\small\item\em Simple 2D plotter class using matplotlib, plots every cell in one patch. \end{DoxyCompactList}\item 
+class \hyperlink{classamrplot_1_1rgplot}{rgplot}
+\begin{DoxyCompactList}\small\item\em As polyplot, but use regridded data to display. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\subsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+def \hyperlink{namespaceamrplot_ae376991fb7aa92c1e8a41501d7910479}{velovect} (u1, u2, d, nvect=None, scalevar=None, scale=100, color=\textquotesingle{}k\textquotesingle{}, ax=None, alpha=1.)
+\begin{DoxyCompactList}\small\item\em Plots normalized velocity vectors. \end{DoxyCompactList}\item 
+def \hyperlink{namespaceamrplot_a6c85688725768d179b09bc02dffca0f3}{contour} (var, d, levels=None, nmax=600, colors=\textquotesingle{}k\textquotesingle{}, linestyles=\textquotesingle{}solid\textquotesingle{}, ax=None, linewidths=1, smooth=1., alpha=1.)
+\item 
+def \hyperlink{namespaceamrplot_afd42022e288c73e942784cf1207fa538}{streamlines} (u1, u2, d, x0=None, y0=None, nmax=600, density=1, fig=None, color=\textquotesingle{}b\textquotesingle{}, linewidth=1, arrowsize=1, alpha=1., smooth=0)
+\begin{DoxyCompactList}\small\item\em plots streamlines from a vector field. \end{DoxyCompactList}\item 
+def \hyperlink{namespaceamrplot_a214eccffe1d56a25d80925cc453f5a23}{streamline} (u1, u2, d, x1\+\_\+0, x2\+\_\+0, dl=1., fig=None, nmax=600)
+\item 
+def \hyperlink{namespaceamrplot_aa8e7367464df74565e4c8ab85660def0}{gridvar} (var, d, xrange, yrange, nmax=600, smooth=0)
+\end{DoxyCompactItemize}
+\subsection*{Variables}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{namespaceamrplot_a29460b111d807c4745b5a83ec9c4e806}{default\+\_\+timer} = time.\+clock
+\end{DoxyCompactItemize}
+
+
+\subsection{Function Documentation}
+\mbox{\Hypertarget{namespaceamrplot_a6c85688725768d179b09bc02dffca0f3}\label{namespaceamrplot_a6c85688725768d179b09bc02dffca0f3}} 
+\index{amrplot@{amrplot}!contour@{contour}}
+\index{contour@{contour}!amrplot@{amrplot}}
+\subsubsection{\texorpdfstring{contour()}{contour()}}
+{\footnotesize\ttfamily def amrplot.\+contour (\begin{DoxyParamCaption}\item[{}]{var,  }\item[{}]{d,  }\item[{}]{levels = {\ttfamily None},  }\item[{}]{nmax = {\ttfamily 600},  }\item[{}]{colors = {\ttfamily \textquotesingle{}k\textquotesingle{}},  }\item[{}]{linestyles = {\ttfamily \textquotesingle{}solid\textquotesingle{}},  }\item[{}]{ax = {\ttfamily None},  }\item[{}]{linewidths = {\ttfamily 1},  }\item[{}]{smooth = {\ttfamily 1.},  }\item[{}]{alpha = {\ttfamily 1.} }\end{DoxyParamCaption})}
+
+
+
+Definition at line 475 of file amrplot.\+py.
+
+
+\begin{DoxyCode}
+475 \textcolor{keyword}{def }\hyperlink{namespaceamrplot_a6c85688725768d179b09bc02dffca0f3}{contour}(
+      var,d,levels=None,nmax=600,colors='k',linestyles='solid',ax=None,linewidths=1,smooth=1.,alpha=1.):
+476     \textcolor{keywordflow}{if} ax==\textcolor{keywordtype}{None}:
+477         ax=plt.gca()
+478 
+479     xrange=[ax.get\_xlim()[0],ax.get\_xlim()[1]]
+480     yrange=[ax.get\_ylim()[0],ax.get\_ylim()[1]]
+481 
+482     \textcolor{comment}{# Aspect ratio:}
+483     r=(xrange[1]-xrange[0])/(yrange[1]-yrange[0])
+484     \textcolor{keywordflow}{if} r<1:
+485         ny=nmax
+486         nx=int(r*nmax)
+487     \textcolor{keywordflow}{else}:
+488         nx=nmax
+489         ny=int(nmax/r)
+490     nregrid = [nx,ny]
+491     
+492     CC=d.getCenterPoints()
+493     tmp0=np.complex(0,nregrid[0])
+494     tmp1=np.complex(0,nregrid[1])
+495     grid\_x, grid\_y = np.mgrid[xrange[0]:xrange[1]:tmp0, yrange[0]:yrange[1]:tmp1]
+496     gridvar = griddata(CC, var, (grid\_x, grid\_y), method=\textcolor{stringliteral}{'linear'})
+497     isnan=np.isnan(gridvar)
+498     gridvar[isnan] = griddata(CC, var, (grid\_x[isnan], grid\_y[isnan]), method=\textcolor{stringliteral}{'nearest'})
+499 
+500 \textcolor{comment}{# smooth the data slightly:}
+501     blurred\_gridvar = ndimage.gaussian\_filter(gridvar, sigma=smooth)
+502 
+503 
+504     \textcolor{keywordflow}{if} levels == \textcolor{keywordtype}{None}:
+505         cs = ax.contour(grid\_x,grid\_y,blurred\_gridvar,16,alpha=alpha)
+506     \textcolor{keywordflow}{else}:
+507         cs = ax.contour(grid\_x,grid\_y,blurred\_gridvar,levels=levels,colors=colors,linestyles=linestyles,
+      linewidths=linewidths,alpha=alpha)
+508 
+509     plt.draw()
+510     \textcolor{keywordflow}{return} cs
+511 
+512 \textcolor{comment}{#=============================================================================}
+\end{DoxyCode}
+\mbox{\Hypertarget{namespaceamrplot_aa8e7367464df74565e4c8ab85660def0}\label{namespaceamrplot_aa8e7367464df74565e4c8ab85660def0}} 
+\index{amrplot@{amrplot}!gridvar@{gridvar}}
+\index{gridvar@{gridvar}!amrplot@{amrplot}}
+\subsubsection{\texorpdfstring{gridvar()}{gridvar()}}
+{\footnotesize\ttfamily def amrplot.\+gridvar (\begin{DoxyParamCaption}\item[{}]{var,  }\item[{}]{d,  }\item[{}]{xrange,  }\item[{}]{yrange,  }\item[{}]{nmax = {\ttfamily 600},  }\item[{}]{smooth = {\ttfamily 0} }\end{DoxyParamCaption})}
+
+
+
+Definition at line 629 of file amrplot.\+py.
+
+
+\begin{DoxyCode}
+629 \textcolor{keyword}{def }\hyperlink{namespaceamrplot_aa8e7367464df74565e4c8ab85660def0}{gridvar}(var,d,xrange,yrange,nmax=600,smooth=0):
+630 
+631     \textcolor{comment}{# Aspect ratio:}
+632     r=(xrange[1]-xrange[0])/(yrange[1]-yrange[0])
+633     \textcolor{keywordflow}{if} r<1:
+634         ny=nmax
+635         nx=int(r*nmax)
+636     \textcolor{keywordflow}{else}:
+637         nx=nmax
+638         ny=int(nmax/r)
+639     nregrid = [nx,ny]
+640     
+641     CC=d.getCenterPoints()
+642     tmp0=np.complex(0,nregrid[0])
+643     tmp1=np.complex(0,nregrid[1])
+644     grid\_x, grid\_y = np.mgrid[xrange[0]:xrange[1]:tmp0, yrange[0]:yrange[1]:tmp1]
+645     gridvar = griddata(CC, var, (grid\_x, grid\_y), method=\textcolor{stringliteral}{'linear'})
+646     isnan=np.isnan(gridvar)
+647     gridvar[isnan] = griddata(CC, var, (grid\_x[isnan], grid\_y[isnan]), method=\textcolor{stringliteral}{'nearest'})
+648 
+649 \textcolor{comment}{# smooth the data slightly:}
+650     blurred\_gridvar = ndimage.gaussian\_filter(gridvar, sigma=smooth)
+651 
+652     \textcolor{keywordflow}{return} blurred\_gridvar,grid\_x,grid\_y
+653 \end{DoxyCode}
+\mbox{\Hypertarget{namespaceamrplot_a214eccffe1d56a25d80925cc453f5a23}\label{namespaceamrplot_a214eccffe1d56a25d80925cc453f5a23}} 
+\index{amrplot@{amrplot}!streamline@{streamline}}
+\index{streamline@{streamline}!amrplot@{amrplot}}
+\subsubsection{\texorpdfstring{streamline()}{streamline()}}
+{\footnotesize\ttfamily def amrplot.\+streamline (\begin{DoxyParamCaption}\item[{}]{u1,  }\item[{}]{u2,  }\item[{}]{d,  }\item[{}]{x1\+\_\+0,  }\item[{}]{x2\+\_\+0,  }\item[{}]{dl = {\ttfamily 1.},  }\item[{}]{fig = {\ttfamily None},  }\item[{}]{nmax = {\ttfamily 600} }\end{DoxyParamCaption})}
+
+
+
+Definition at line 571 of file amrplot.\+py.
+
+
+\begin{DoxyCode}
+571 \textcolor{keyword}{def }\hyperlink{namespaceamrplot_a214eccffe1d56a25d80925cc453f5a23}{streamline}(u1,u2,d,x1\_0,x2\_0,dl=1.,fig=None,nmax=600):
+572 
+573     \textcolor{keywordflow}{if} fig==\textcolor{keywordtype}{None}:
+574         ax=plt.gca()
+575     \textcolor{keywordflow}{else}:
+576         ax=fig.figure.gca()
+577 
+578     xrange=[ax.get\_xlim()[0],ax.get\_xlim()[1]]
+579     yrange=[ax.get\_ylim()[0],ax.get\_ylim()[1]]
+580 
+581     \textcolor{keywordflow}{if} nmax == 600 \textcolor{keywordflow}{and} fig != \textcolor{keywordtype}{None}:
+582         nmax = fig.dpi * max([fig.fig\_w,fig.fig\_h])
+583 
+584 
+585     \textcolor{comment}{# Aspect ratio:}
+586     r=(xrange[1]-xrange[0])/(yrange[1]-yrange[0])
+587     \textcolor{keywordflow}{if} r<1:
+588         ny=nmax
+589         nx=int(r*nmax)
+590     \textcolor{keywordflow}{else}:
+591         nx=nmax
+592         ny=int(nmax/r)
+593     nregrid = [nx,ny]
+594 
+595     CC=d.getCenterPoints()
+596     tmp0=np.complex(0,nregrid[0])
+597     tmp1=np.complex(0,nregrid[1])
+598     x=np.linspace(xrange[0],xrange[1],nregrid[0])
+599     y=np.linspace(yrange[0],yrange[1],nregrid[1])
+600     grid\_x, grid\_y = np.mgrid[xrange[0]:xrange[1]:tmp0, yrange[0]:yrange[1]:tmp1]
+601 
+602     u = griddata(CC, u1, (grid\_x, grid\_y), method=\textcolor{stringliteral}{'linear'})
+603     v = griddata(CC, u2, (grid\_x, grid\_y), method=\textcolor{stringliteral}{'linear'})
+604     uisnan=np.isnan(u)
+605     visnan=np.isnan(v)
+606     un = np.empty(np.shape(u))
+607     vn = np.empty(np.shape(v))
+608     un[uisnan] = griddata(CC, u1, (grid\_x[uisnan], grid\_y[uisnan]), method=\textcolor{stringliteral}{'nearest'})
+609     vn[visnan] = griddata(CC, u2, (grid\_x[visnan], grid\_y[visnan]), method=\textcolor{stringliteral}{'nearest'})
+610     u[uisnan]=un[uisnan]
+611     v[visnan]=vn[visnan]
+612 \textcolor{comment}{# Normalize:}
+613     mag=np.sqrt(u**2+v**2)
+614     u=u/mag
+615     v=v/mag
+616 
+617     fu = interpolate.interp2d(grid\_x, grid\_y, u, kind=\textcolor{stringliteral}{'cubic'})
+618     fv = interpolate.interp2d(grid\_x, grid\_y, v, kind=\textcolor{stringliteral}{'cubic'})
+619     x1=[x1\_0]
+620     x2=[x2\_0]
+621     while(x1[-1] >= xrange[0] \textcolor{keywordflow}{and} x1[-1] <= xrange[1] \textcolor{keywordflow}{and}
+622     x2[-1] >= yrange[0] \textcolor{keywordflow}{and} x2[-1] <= yrange[1]):
+623         dt=dl
+624         x1.append(x1[-1]+fu(x1[-1],x2[-1])*dt)
+625         x2.append(x2[-1]+fv(x1[-1],x2[-1])*dt)
+626     \textcolor{keywordflow}{return} [np.array(x1),np.array(x2)]
+627 
+628 \textcolor{comment}{#=============================================================================}
+\end{DoxyCode}
+\mbox{\Hypertarget{namespaceamrplot_afd42022e288c73e942784cf1207fa538}\label{namespaceamrplot_afd42022e288c73e942784cf1207fa538}} 
+\index{amrplot@{amrplot}!streamlines@{streamlines}}
+\index{streamlines@{streamlines}!amrplot@{amrplot}}
+\subsubsection{\texorpdfstring{streamlines()}{streamlines()}}
+{\footnotesize\ttfamily def amrplot.\+streamlines (\begin{DoxyParamCaption}\item[{}]{u1,  }\item[{}]{u2,  }\item[{}]{d,  }\item[{}]{x0 = {\ttfamily None},  }\item[{}]{y0 = {\ttfamily None},  }\item[{}]{nmax = {\ttfamily 600},  }\item[{}]{density = {\ttfamily 1},  }\item[{}]{fig = {\ttfamily None},  }\item[{}]{color = {\ttfamily \textquotesingle{}b\textquotesingle{}},  }\item[{}]{linewidth = {\ttfamily 1},  }\item[{}]{arrowsize = {\ttfamily 1},  }\item[{}]{alpha = {\ttfamily 1.},  }\item[{}]{smooth = {\ttfamily 0} }\end{DoxyParamCaption})}
+
+
+
+plots streamlines from a vector field. 
+
+Use density=\mbox{[}densx,densy\mbox{]} to control how close streamlines are allowed to get. 
+
+Definition at line 514 of file amrplot.\+py.
+
+
+\begin{DoxyCode}
+514     \textcolor{stringliteral}{'''plots streamlines from a vector field.  Use density=[densx,densy] to control how close streamlines
+       are allowed to get.'''}
+515     \textcolor{keywordflow}{if} fig==\textcolor{keywordtype}{None}:
+516         ax=plt.gca()
+517     \textcolor{keywordflow}{else}:
+518         ax=fig.ax
+519 
+520     xrange=[ax.get\_xlim()[0],ax.get\_xlim()[1]]
+521     yrange=[ax.get\_ylim()[0],ax.get\_ylim()[1]]
+522 
+523     \textcolor{keywordflow}{if} nmax == 600 \textcolor{keywordflow}{and} fig != \textcolor{keywordtype}{None}:
+524         nmax = fig.dpi * max([fig.fig\_w,fig.fig\_h])
+525 
+526 
+527     \textcolor{comment}{# Aspect ratio:}
+528     r=(xrange[1]-xrange[0])/(yrange[1]-yrange[0])
+529     \textcolor{keywordflow}{if} r<1:
+530         ny=nmax
+531         nx=int(r*nmax)
+532     \textcolor{keywordflow}{else}:
+533         nx=nmax
+534         ny=int(nmax/r)
+535     nregrid = [nx,ny]
+536     print(nregrid)
+537     
+538     CC=d.getCenterPoints()
+539     tmp0=np.complex(0,nregrid[0])
+540     tmp1=np.complex(0,nregrid[1])
+541     x=np.linspace(xrange[0],xrange[1],nregrid[0])
+542     y=np.linspace(yrange[0],yrange[1],nregrid[1])
+543     grid\_x, grid\_y = np.mgrid[xrange[0]:xrange[1]:tmp0, yrange[0]:yrange[1]:tmp1]
+544 
+545     u = griddata(CC, u1, (grid\_x, grid\_y), method=\textcolor{stringliteral}{'linear'})
+546     v = griddata(CC, u2, (grid\_x, grid\_y), method=\textcolor{stringliteral}{'linear'})
+547     uisnan=np.isnan(u)
+548     visnan=np.isnan(v)
+549     un = np.empty(np.shape(u))
+550     vn = np.empty(np.shape(v))
+551     un[uisnan] = griddata(CC, u1, (grid\_x[uisnan], grid\_y[uisnan]), method=\textcolor{stringliteral}{'nearest'})
+552     vn[visnan] = griddata(CC, u2, (grid\_x[visnan], grid\_y[visnan]), method=\textcolor{stringliteral}{'nearest'})
+553     u[uisnan]=un[uisnan]
+554     v[visnan]=vn[visnan]
+555 
+556     \textcolor{keywordflow}{if} (smooth != 0):
+557         u = ndimage.gaussian\_filter(u, sigma=smooth)
+558         v = ndimage.gaussian\_filter(v, sigma=smooth)
+559 
+560     \textcolor{keywordflow}{if} (x0 != \textcolor{keywordtype}{None} \textcolor{keywordflow}{and} y0!= \textcolor{keywordtype}{None}):
+561         \textcolor{keywordflow}{for} myx \textcolor{keywordflow}{in} zip(x0,y0):
+562             streamplot(x, y, u.transpose(), v.transpose(), x\_0=myx[0], 
+563                        y\_0=myx[1], density=density, linewidth=linewidth,
+564                        INTEGRATOR=\textcolor{stringliteral}{'RK4'}, color=color, arrowsize=arrowsize,alpha=alpha)
+565     \textcolor{keywordflow}{else}:
+566         streamplot(x, y, u.transpose(), v.transpose(),  
+567                    density=density, linewidth=linewidth,
+568                    INTEGRATOR=\textcolor{stringliteral}{'RK4'}, color=color, arrowsize=arrowsize,alpha=alpha)
+569 
+570 \textcolor{comment}{#=============================================================================}
+\end{DoxyCode}
+\mbox{\Hypertarget{namespaceamrplot_ae376991fb7aa92c1e8a41501d7910479}\label{namespaceamrplot_ae376991fb7aa92c1e8a41501d7910479}} 
+\index{amrplot@{amrplot}!velovect@{velovect}}
+\index{velovect@{velovect}!amrplot@{amrplot}}
+\subsubsection{\texorpdfstring{velovect()}{velovect()}}
+{\footnotesize\ttfamily def amrplot.\+velovect (\begin{DoxyParamCaption}\item[{}]{u1,  }\item[{}]{u2,  }\item[{}]{d,  }\item[{}]{nvect = {\ttfamily None},  }\item[{}]{scalevar = {\ttfamily None},  }\item[{}]{scale = {\ttfamily 100},  }\item[{}]{color = {\ttfamily \textquotesingle{}k\textquotesingle{}},  }\item[{}]{ax = {\ttfamily None},  }\item[{}]{alpha = {\ttfamily 1.} }\end{DoxyParamCaption})}
+
+
+
+Plots normalized velocity vectors. 
+
+
+
+Definition at line 442 of file amrplot.\+py.
+
+
+\begin{DoxyCode}
+442     \textcolor{stringliteral}{'''Plots normalized velocity vectors'''}
+443 
+444     minvel=1e-40
+445 
+446     \textcolor{keywordflow}{if} ax==\textcolor{keywordtype}{None}:
+447         ax=plt.gca()
+448 
+449     CC=d.getCenterPoints()
+450     n=np.sqrt(u1**2+u2**2)
+451     \textcolor{comment}{# remove zero velocity:}
+452     m=n<minvel
+453     vr=np.ma.filled(np.ma.masked\_array(u1/n,m),0.)
+454     vz=np.ma.filled(np.ma.masked\_array(u2/n,m),0.)
+455     \textcolor{keywordflow}{if} scalevar \textcolor{keywordflow}{is} \textcolor{keywordflow}{not} \textcolor{keywordtype}{None}:
+456         vr = vr*scalevar
+457         vz = vz*scalevar
+458     \textcolor{keywordflow}{if} nvect==\textcolor{keywordtype}{None}:
+459         Q=ax.quiver(CC[:,0],CC[:,1],vr,vz,pivot=\textcolor{stringliteral}{'middle'},width=1e-3,minlength=0.,scale=scale,
+460                     headwidth=6,alpha=alpha)
+461     \textcolor{keywordflow}{else}:
+462         \textcolor{comment}{# regrid the data:}
+463         tmp0=np.complex(0,nvect[0])
+464         tmp1=np.complex(0,nvect[1])
+465         grid\_r, grid\_z = np.mgrid[ax.get\_xlim()[0]:ax.get\_xlim()[1]:tmp0, ax.get\_ylim()[0]:ax.get\_ylim()[1]
+      :tmp1]
+466         grid\_vr = griddata(CC, vr, (grid\_r, grid\_z), method=\textcolor{stringliteral}{'nearest'})
+467         grid\_vz = griddata(CC, vz, (grid\_r, grid\_z), method=\textcolor{stringliteral}{'nearest'})
+468         Q=ax.quiver(grid\_r,grid\_z,grid\_vr,grid\_vz,pivot=\textcolor{stringliteral}{'middle'},width=2e-3,minlength=minvel,scale=scale,
+469                     headwidth=10,headlength=10,color=color,edgecolor=color,rasterized=\textcolor{keyword}{True},alpha=alpha)
+470 
+471     plt.draw()
+472     \textcolor{keywordflow}{return} Q     
+473 
+474 \textcolor{comment}{#=============================================================================}
+\end{DoxyCode}
+
+
+\subsection{Variable Documentation}
+\mbox{\Hypertarget{namespaceamrplot_a29460b111d807c4745b5a83ec9c4e806}\label{namespaceamrplot_a29460b111d807c4745b5a83ec9c4e806}} 
+\index{amrplot@{amrplot}!default\+\_\+timer@{default\+\_\+timer}}
+\index{default\+\_\+timer@{default\+\_\+timer}!amrplot@{amrplot}}
+\subsubsection{\texorpdfstring{default\+\_\+timer}{default\_timer}}
+{\footnotesize\ttfamily amrplot.\+default\+\_\+timer = time.\+clock}
+
+
+
+Definition at line 19 of file amrplot.\+py.
+

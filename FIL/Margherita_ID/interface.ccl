@@ -1,0 +1,7 @@
+# Interface definition for thorn ID_converter_ILGRMHD
+
+implements: Margherita_ID
+
+inherits: ADMBase, Boundary, SpaceMask, Tmunubase, HydroBase, grid
+
+USES INCLUDE: Margherita_EOS.h

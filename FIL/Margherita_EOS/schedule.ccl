@@ -1,0 +1,52 @@
+#
+if(CCTK_Equals(eos_type,"tabulated") || CCTK_Equals(eos_type,"tabulated_leptonic")) {
+  schedule Margherita_readtable_schedule at CCTK_WRAGH before THC_SetupAtmosphere
+  {
+    LANG: C
+    options: global
+  } "Read tabulated nuclear table."
+
+  schedule Margherita_setup_hot_slice at CCTK_WRAGH before THC_SetupAtmosphere after Margherita_readtable_schedule after Margherita_Register_Atmosphere_C2P
+  {
+    LANG: C
+    options: global
+  } "Compute beta equilibrium slice"
+}
+if(CCTK_Equals(eos_type,"polytropic"))
+{
+  schedule Margherita_setup_polytrope at CCTK_WRAGH before THC_SetupAtmosphere
+  {
+    LANG: C
+    options: global
+  } "Setup piecewise polytropic EOS."
+}
+
+if(CCTK_Equals(eos_type,"tabulated_cold"))
+{
+  schedule Margherita_setup_cold_table at CCTK_WRAGH before THC_SetupAtmosphere
+  {
+    LANG: C
+    options: global
+  } "Setup cold table eos."
+}
+
+schedule Margherita_Register_Atmosphere_C2P at CCTK_WRAGH after Margherita_setup_polytrope after Margherita_readtable_schedule before THC_SetupAtmosphere
+{
+   LANG: C
+   options: global
+} "Register atmosphere and Con2Prim constants"
+
+if(CCTK_IsThornActive("EOS_Base")){
+schedule Margherita_EOS_Base_Binding at BaseGrid
+{
+   LANG: C
+   options: global
+} "Setup EOS_Base binding"
+}
+if(CCTK_Equals(eos_type,"tabulated") || CCTK_Equals(eos_type,"tabulated_leptonic")) {
+  schedule Margherita_setup_Weakhub at CCTK_WRAGH before Margherita_readtable_schedule
+  {
+    LANG: C
+    options: global
+  } "Read Weakhub neutrino microphysics table."
+}

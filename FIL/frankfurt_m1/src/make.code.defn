@@ -1,0 +1,24 @@
+# Main make.code.defn file for thorn FIL_M1
+
+# Source files in this directory
+SRCS =  mol_registration.cc \
+    \
+    postpostinitial__set_symmetries__copy_timelevels.cc \
+    \
+    driver_evaluate_M1_rhs.cc \
+    driver_evaluate_M1_collisional_rhs.cc \
+    driver_M1_conserv_to_prims.cc \
+    driver_M1_prims_to_conservs__intial.cc \
+    driver_get_eas.cc \
+    m1_closure.cc \
+    m1_fluxes.cc \
+    m1_collisional.cc \
+    frankfurt_m1_counters.cc \
+    paramcheck.cc \
+    symmetries.cc \
+    driver_select_BCs.cc \
+    frankfurt_m1_utils.cc \
+    compute_m1_diagnostics.cc \
+    set_id.cc
+     #\
+SUBDIRS = 

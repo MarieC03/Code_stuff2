@@ -1,0 +1,320 @@
+# Interface definition for thorn FIL_M1
+
+implements: frankfurt_m1
+inherits: ADMBase, Boundary, SpaceMask, Tmunubase, HydroBase, grid, IllinoisGRMHD, frankfurt_utils
+
+
+INCLUDE HEADER: frankfurt_m1.h in frankfurt_m1.h
+
+USES INCLUDE: constexpr_utils.hh
+USES INCLUDE: Symmetry.h
+USES INCLUDE: Margherita_M1.h
+USES INCLUDE: Margherita_EOS.h
+USES INCLUDE: Margherita_Weakhub.h
+
+public:
+
+#--------- RHS VARIABLES ---------#
+cctk_real m1_conservatives_scalars_rhs type = GF TAGS='prolongation="none" Checkpoint="no"'
+{
+  Nnue_rhs,Enue_rhs,
+  Nnue_bar_rhs,Enue_bar_rhs,
+  Nnumu_rhs,Enumu_rhs,
+  Nnumu_bar_rhs,Enumu_bar_rhs,
+  Nnux_rhs,Enux_rhs
+}
+
+cctk_real m1_conservatives_vectors_nue_rhs type = GF TAGS='prolongation="none" Checkpoint="no" tensortypealias="D"'
+{
+  Fnue_x_rhs,Fnue_y_rhs,Fnue_z_rhs
+}
+
+cctk_real m1_conservatives_vectors_nue_bar_rhs type = GF TAGS='prolongation="none" Checkpoint="no" tensortypealias="D"'
+{
+  Fnue_bar_x_rhs,Fnue_bar_y_rhs,Fnue_bar_z_rhs
+}
+
+cctk_real m1_conservatives_vectors_numu_rhs type = GF TAGS='prolongation="none" Checkpoint="no" tensortypealias="D"'
+{
+  Fnumu_x_rhs,Fnumu_y_rhs,Fnumu_z_rhs
+}
+
+cctk_real m1_conservatives_vectors_numu_bar_rhs type = GF TAGS='prolongation="none" Checkpoint="no" tensortypealias="D"'
+{
+  Fnumu_bar_x_rhs,Fnumu_bar_y_rhs,Fnumu_bar_z_rhs
+}
+
+cctk_real m1_conservatives_vectors_nux_rhs type = GF TAGS='prolongation="none" Checkpoint="no" tensortypealias="D"'
+{
+  Fnux_x_rhs,Fnux_y_rhs,Fnux_z_rhs
+}
+
+#--------- EVOLVED VARIABLES ---------#
+cctk_real m1_conservatives_scalars type = GF Timelevels=3 tags='tensortypealias="Scalar"'
+{
+  Nnue_star, Enue_star,
+  Nnue_bar_star, Enue_bar_star,
+  Nnumu_star, Enumu_star,
+  Nnumu_bar_star, Enumu_bar_star
+  Nnux_star, Enux_star
+} "Evolved neutrino scalar variables"
+
+
+cctk_real m1_conservatives_vectors_nue type = GF Timelevels=3 tags='tensortypealias="D"'
+{
+  Ft_nue_x,Ft_nue_y,Ft_nue_z
+} "Evolved neutrino vector variables"
+
+cctk_real m1_conservatives_vectors_nue_bar type = GF Timelevels=3 tags='tensortypealias="D"'
+{
+  Ft_nue_bar_x,Ft_nue_bar_y,Ft_nue_bar_z
+} "Evolved neutrino vector variables"
+
+cctk_real m1_conservatives_vectors_numu type = GF Timelevels=3 tags='tensortypealias="D"'
+{
+  Ft_numu_x,Ft_numu_y,Ft_numu_z
+} "Evolved neutrino vector variables"
+
+cctk_real m1_conservatives_vectors_numu_bar type = GF Timelevels=3 tags='tensortypealias="D"'
+{
+  Ft_numu_bar_x,Ft_numu_bar_y,Ft_numu_bar_z
+} "Evolved neutrino vector variables"
+
+cctk_real m1_conservatives_vectors_nux type = GF Timelevels=3 tags='tensortypealias="D"'
+{
+  Ft_nux_x,Ft_nux_y,Ft_nux_z
+} "Evolved neutrino vector variables"
+
+cctk_real m1_primitives_scalars type = GF tags='InterpNumTimelevels=1 prolongation="none" tensortypealias="Scalar"'
+{
+  Nnue, Enue,
+  Nnue_bar, Enue_bar,
+  Nnumu, Enumu,
+  Nnumu_bar, Enumu_bar,
+  Nnux, Enux,
+  temp_nue, temp_nue_bar, temp_numu, temp_numu_bar, temp_nux
+} "Primitive neutrino scalar variables"
+
+cctk_real m1_primitives_vectors_nue type = GF tags='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  Fnue_x,Fnue_y,Fnue_z
+} "Primitive neutrino vector variables"
+
+cctk_real m1_primitives_vectors_nue_bar type = GF tags='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  Fnue_bar_x,Fnue_bar_y,Fnue_bar_z
+} "Primitive neutrino vector variables"
+
+cctk_real m1_primitives_vectors_numu type = GF tags='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  Fnumu_x,Fnumu_y,Fnumu_z
+} "Primitive neutrino vector variables"
+
+cctk_real m1_primitives_vectors_numu_bar type = GF tags='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  Fnumu_bar_x,Fnumu_bar_y,Fnumu_bar_z
+} "Primitive neutrino vector variables"
+
+cctk_real m1_primitives_vectors_nux type = GF tags='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  Fnux_x,Fnux_y,Fnux_z
+} "Primitive neutrino vector variables"
+
+#--------- EMISSIVITIES AND OPACITIES ---------#
+
+cctk_real neutrino_emissivity type = GF TAGS='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  Qnue, Qnue_bar, Qnumu, Qnumu_bar, Qnux, Rnue, Rnue_bar, Rnumu, Rnumu_bar, Rnux
+}"Neutrino emissivities and number emissivities (energy integrated)"
+
+cctk_real neutrino_opacities type = GF TAGS='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  kappa_nue_a, kappa_nue_s, kappa_nue_n,
+  kappa_nue_bar_a, kappa_nue_bar_s, kappa_nue_bar_n,
+  kappa_numu_a, kappa_numu_s, kappa_numu_n,
+  kappa_numu_bar_a, kappa_numu_bar_s, kappa_numu_bar_n,
+  kappa_nux_a, kappa_nux_s, kappa_nux_n
+}"Neutrino opacities"
+
+
+#---------------------------------------------------
+# Neutrino energies
+#---------------------------------------------------
+cctk_real neutrino_avg_energy_BlackBody type = GF TAGS='InterpNumTimelevels=1 prolongation="none" tensortypealias="Scalar"'
+{
+  epsBB_nue, epsBB_nue_bar, epsBB_numu, epsBB_numu_bar, epsBB_nux
+}"Average neutrino energy computed with blackbody spectrum and fluid temperature"
+
+cctk_real neutrino_avg_energy type = GF TAGS='InterpNumTimelevels=1 prolongation="none" tensortypealias="Scalar"'
+{
+  eps_nue, eps_nue_bar, eps_numu, eps_numu_bar, eps_nux
+}"Average neutrino energy"
+
+cctk_real neutrino_optical_depths type = GF timelevels=3 TAGS='tensortypealias="Scalar" Checkpoint="yes"'
+{
+ tau_nue, tau_nue_bar, tau_numu, tau_numu_bar, tau_nux
+} "Optical depths"
+
+#-------------------------------
+# miscellaneous stats
+#-------------------------------
+cctk_int implicit_stats type = GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+{
+        nue_fail, nue_bar_fail, numu_fail, numu_bar_fail, nux_fail,
+        taufix, yefix, ymufix
+} "Count failures -- mostly useful for debugging"
+
+
+cctk_real m1_heatcool type = GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+
+cctk_real m1_e_lepton_source type=GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+cctk_real m1_mu_lepton_source type=GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+
+cctk_real m1_entropy_source type=GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+
+
+#--------- --------- --------- --------- --------- ---------#
+
+cctk_real zeta_neutrino type = GF TAGS='prolongation="none" Checkpoint="no"'
+{
+  zeta_nue,
+  zeta_nue_bar,
+  zeta_numu,
+  zeta_numu_bar,
+  zeta_nux
+}"Temporary to store the squared Eddington factor"
+
+cctk_real eta_neutrino type = GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+{
+  eta_nue,
+  eta_nue_bar,
+  eta_numu,
+  eta_numu_bar,
+  eta_nux
+}"Fugacities"
+
+
+#--------- P^{ij}, stored to avoid expensive recomputation ---------#
+cctk_real PUPmunu_neutrino type = GF TAGS='prolongation="none" Checkpoint="no"'
+{
+ PUPnue_xx, PUPnue_xy, PUPnue_xz, PUPnue_yy, PUPnue_yz,PUPnue_zz,
+ PUPnue_bar_xx, PUPnue_bar_xy, PUPnue_bar_xz, PUPnue_bar_yy, PUPnue_bar_yz,PUPnue_bar_zz,
+ PUPnumu_xx, PUPnumu_xy, PUPnumu_xz, PUPnumu_yy, PUPnumu_yz,PUPnumu_zz,
+ PUPnumu_bar_xx, PUPnumu_bar_xy, PUPnumu_bar_xz, PUPnumu_bar_yy, PUPnumu_bar_yz,PUPnumu_bar_zz,
+ PUPnux_xx, PUPnux_xy, PUPnux_xz, PUPnux_yy, PUPnux_yz,PUPnux_zz
+}"Temporary to store the contravariant neutrino energy momentum tensor"
+
+#--------- --------- --------- --------- --------- ---------#
+#--------- --------- --------- --------- --------- ---------#
+#--------- --------- --------- --------- --------- ---------#
+
+private:
+
+
+#--------- TEMPORARY VARIABLES USEFUL FOR FLUX COMPUTATION ---------#
+
+cctk_real neutrino_flux_temps type = GF TAGS='prolongation="none" Checkpoint="no"'
+{
+  Nflux, Eflux, Fxflux, Fyflux, Fzflux,
+  v_x, v_y, v_z,
+  temporary
+}
+
+cctk_real neutrino_fluxLO_temps type = GF TAGS='prolongation="none" Checkpoint="no"'
+{
+  Nflux_LF, Eflux_LF, Fxflux_LF, Fyflux_LF, Fzflux_LF
+}"Neutrino low order fluxes for positivity preserving limiter"
+
+
+#--------- TEMPORARY VARIABLES FOR RECONSTRUCTION --------- #
+
+cctk_real m1_primitives_reconstructed_temps type = GF TAGS='prolongation="none" Checkpoint="no"'
+{
+	Nnu_r, Nnu_l,
+	Enu_r, Enu_l,
+	Fnux_r, Fnux_l,
+	Fnuy_r, Fnuy_l,
+	Fnuz_r, Fnuz_l,
+	v_x_r, v_x_l,
+	v_y_r, v_y_l,
+	v_z_r, v_z_l
+} "Temporary recon vars"
+
+
+cctk_real m1_debug_quantities type = GF TAGS='prolongation="none" Checkpoint="no" InterpNumTimelevels=1'
+{
+	eas_temp, eas_ye, eas_ymu, be_scale
+} "Some stuff for debugging purposes"
+
+
+cctk_int frankfurt_m1_rhs_species type=Scalar tags='Checkpoint="no"'
+
+cctk_int RK_counter type=Scalar tags='Checkpoint="no"'
+
+#------- NEW VARIABLES FOR DIAGNOSTICS FOR NEUTRINO --------#
+cctk_real m1_diagnostics type = GF TAGS='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+{
+  mu_p, mu_n, mu_mu, mu_e, yp, 
+  mu_nue, mu_nue_bar, mu_numu, mu_numu_bar, 
+  mu_delta_npe, mu_delta_npmu,
+  mu_delta_npenu, mu_delta_npmunu,
+  ynue, ynue_bar, ynumu, ynumu_bar, 
+  #tau_h, 
+  #P_nubetaeq, eps_nubetaeq, 
+  tau_betaeq_nue, tau_betaeq_nue_bar, tau_betaeq_numu, tau_betaeq_numu_bar,
+  yle_minus, yle_plus, ymu_minus, ymu_plus,
+  press_e_minus, press_e_plus, press_mu_minus, press_mu_plus, press_b,
+  eps_e_minus, eps_e_plus, eps_mu_minus, eps_mu_plus, eps_b
+}"m1_diagnostics quantities"
+
+#---- currently, only leptonic table can use
+#cctk_real EOS_table_diagnostics type = GF TAGS='InterpNumTimelevels=1 prolongation="none" tensortypealias="U"'
+#{
+#  yle_minus, yle_plus, ymu_minus, ymu_plus,
+#  press_e_minus, press_e_plus, press_mu_minus, press_mu_plus, press_b,
+#  eps_e_minus, eps_e_plus, eps_mu_minus, eps_mu_plus, eps_b
+#}"EOS_table_diagnostics quantities"
+
+#--------- --------- --------- --------- --------- ---------#
+#--------- --------- --------- --------- --------- ---------#
+#--------- --------- --------- --------- --------- ---------#
+
+####################################################
+###  Functions provided by MoL for registration  ###
+####################################################
+
+CCTK_INT FUNCTION MoLRegisterEvolvedGroup(CCTK_INT IN EvolvedIndex, CCTK_INT IN RHSIndex)
+CCTK_INT FUNCTION MoLRegisterConstrained(CCTK_INT IN ConstrainedIndex)
+CCTK_INT FUNCTION MoLRegisterConstrainedGroup(CCTK_INT IN ConstrainedIndex)
+CCTK_INT FUNCTION MoLRegisterSaveAndRestoreGroup(CCTK_INT IN SandRIndex)
+
+USES FUNCTION MoLRegisterConstrained
+USES FUNCTION MoLRegisterConstrainedGroup
+USES FUNCTION MoLRegisterSaveAndRestoreGroup
+USES FUNCTION MoLRegisterEvolvedGroup
+
+#########################################
+###  Aliased functions from Boundary  ###
+#########################################
+
+CCTK_INT FUNCTION Boundary_SelectVarForBC(CCTK_POINTER_TO_CONST IN GH, \
+  CCTK_INT IN faces, CCTK_INT IN boundary_width, CCTK_INT IN table_handle, \
+  CCTK_STRING IN var_name, CCTK_STRING IN bc_name)
+CCTK_INT FUNCTION Boundary_SelectGroupForBC(CCTK_POINTER_TO_CONST IN GH, \
+  CCTK_INT IN faces, CCTK_INT IN boundary_width, CCTK_INT IN table_handle, \
+  CCTK_STRING IN group_name, CCTK_STRING IN bc_name)
+
+USES FUNCTION Boundary_SelectVarForBC
+USES FUNCTION Boundary_SelectGroupForBC
+
+#########################################
+###  Aliased functions from Carpet    ###
+#########################################
+
+CCTK_INT FUNCTION                         \
+    GetRefinementLevel                    \
+        (CCTK_POINTER_TO_CONST IN cctkGH)
+USES FUNCTION GetRefinementLevel
+
+CCTK_INT FUNCTION EnableProlongating(CCTK_INT IN Status)
+USES FUNCTION EnableProlongating

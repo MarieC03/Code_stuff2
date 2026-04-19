@@ -1,0 +1,9 @@
+# Configuration definition for thorn frankfurt_m1
+REQUIRES Boundary CartGrid3D SpaceMask Margherita
+REQUIRES GSL
+
+PROVIDES frankfurt_m1
+{
+  SCRIPT
+  LANG
+}

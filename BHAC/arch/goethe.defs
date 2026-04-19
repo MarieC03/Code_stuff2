@@ -1,0 +1,7 @@
+F90=mpiifort
+CC=mpicc
+CXX=mpicxx
+
+FFLAGS = -c
+F90FLAGS = -xCORE-AVX512 -mtune=icelake-server -FR -implicitnone -O3 -diag-disable=10441 -I${HDF5_ROOT}/include -L${HDF5_ROOT}/lib -lstdc++ -lhdf5_fortran -lhdf5_cpp -lhdf5_hl_fortran -lhdf5_hl_cpp -lhdf5_hl -lhdf5 -lz -ldl -Wl,--copy-dt-needed-entries -lifcore
+LINK= $(F90)  $(F90FLAGS)

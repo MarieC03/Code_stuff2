@@ -1,0 +1,85 @@
+\hypertarget{namespaceread}{}\section{read Namespace Reference}
+\label{namespaceread}\index{read@{read}}
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{classread_1_1ensemble}{ensemble}
+\begin{DoxyCompactList}\small\item\em Load particle ensemble .csv files. \end{DoxyCompactList}\item 
+class \hyperlink{classread_1_1load}{load}
+\begin{DoxyCompactList}\small\item\em Loader class for vtu and pvtu files. \end{DoxyCompactList}\item 
+class \hyperlink{classread_1_1loadcsv}{loadcsv}
+\begin{DoxyCompactList}\small\item\em Load 1D comma separated list from a cut. \end{DoxyCompactList}\item 
+class \hyperlink{classread_1_1loadvti}{loadvti}
+\begin{DoxyCompactList}\small\item\em Loader class for vti data. \end{DoxyCompactList}\item 
+class \hyperlink{classread_1_1particles}{particles}
+\begin{DoxyCompactList}\small\item\em Load binary particles data. \end{DoxyCompactList}\item 
+class \hyperlink{classread_1_1postrad}{postrad}
+\begin{DoxyCompactList}\small\item\em Load binary postrad data. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\subsection*{Functions}
+\begin{DoxyCompactItemize}
+\item 
+def \hyperlink{namespaceread_a565fbd6a03d2869132df93c79903a6d4}{extract} (data, varname, attribute\+\_\+mode=\textquotesingle{}cell\textquotesingle{})
+\begin{DoxyCompactList}\small\item\em Extracts variable \char`\"{}varname\char`\"{} from vtk datastructure "data\textquotesingle{}. \end{DoxyCompactList}\end{DoxyCompactItemize}
+\subsection*{Variables}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{namespaceread_a0ffc2818a4b9a8753985d1fd9095e02f}{default\+\_\+timer} = time.\+clock
+\end{DoxyCompactItemize}
+
+
+\subsection{Function Documentation}
+\mbox{\Hypertarget{namespaceread_a565fbd6a03d2869132df93c79903a6d4}\label{namespaceread_a565fbd6a03d2869132df93c79903a6d4}} 
+\index{read@{read}!extract@{extract}}
+\index{extract@{extract}!read@{read}}
+\subsubsection{\texorpdfstring{extract()}{extract()}}
+{\footnotesize\ttfamily def read.\+extract (\begin{DoxyParamCaption}\item[{}]{data,  }\item[{}]{varname,  }\item[{}]{attribute\+\_\+mode = {\ttfamily \textquotesingle{}cell\textquotesingle{}} }\end{DoxyParamCaption})}
+
+
+
+Extracts variable \char`\"{}varname\char`\"{} from vtk datastructure "data\textquotesingle{}. 
+
+
+
+Definition at line 22 of file read.\+py.
+
+
+\begin{DoxyCode}
+22     \textcolor{stringliteral}{'''Extracts variable "varname" from vtk datastructure "data"'''}
+23     \textcolor{keywordflow}{if} attribute\_mode == \textcolor{stringliteral}{'cell'}:
+24         vtk\_values = data.GetCellData().GetArray(varname)
+25     \textcolor{keywordflow}{elif} attribute\_mode == \textcolor{stringliteral}{'point'}:
+26         \textcolor{keywordflow}{if} data.GetPointData().GetNumberOfArrays() > 0:
+27             vtk\_values = data.GetPointData().GetArray(varname)
+28         \textcolor{keywordflow}{else}:
+29             \textcolor{comment}{# Convert to pointdata first}
+30             c2p = v.vtkCellDataToPointData()
+31             c2p.SetInput(data)
+32             pointdata=c2p.GetOutput()
+33             pointdata.Update()
+34             vtk\_values = pointdata.GetPointData().GetScalars(varname)
+35     \textcolor{keywordflow}{elif} attribute\_mode == \textcolor{stringliteral}{'topoint'}:
+36         c2p = v.vtkCellDataToPointData()
+37         c2p.SetInput(data)
+38         pointdata=c2p.GetOutput()
+39         pointdata.Update()
+40         vtk\_values = pointdata.GetPointData().GetScalars(varname)
+41     \textcolor{keywordflow}{else}:
+42         print(\textcolor{stringliteral}{"attribute\_mode is either 'cell' or 'point'"})
+43     
+44     \textcolor{keywordflow}{return} ah.vtk2array(vtk\_values)
+45 
+46 \textcolor{comment}{#=============================================================================}
+\end{DoxyCode}
+
+
+\subsection{Variable Documentation}
+\mbox{\Hypertarget{namespaceread_a0ffc2818a4b9a8753985d1fd9095e02f}\label{namespaceread_a0ffc2818a4b9a8753985d1fd9095e02f}} 
+\index{read@{read}!default\+\_\+timer@{default\+\_\+timer}}
+\index{default\+\_\+timer@{default\+\_\+timer}!read@{read}}
+\subsubsection{\texorpdfstring{default\+\_\+timer}{default\_timer}}
+{\footnotesize\ttfamily read.\+default\+\_\+timer = time.\+clock}
+
+
+
+Definition at line 14 of file read.\+py.
+

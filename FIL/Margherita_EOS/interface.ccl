@@ -1,0 +1,17 @@
+# Interface definition for thorn Margherita
+IMPLEMENTS: Margherita
+INHERITS: frankfurt_utils
+
+INCLUDE HEADER: Margherita_EOS.h IN Margherita_EOS.h
+INCLUDE HEADER: Margherita_Leak.h IN Margherita_Leak.h
+INCLUDE HEADER: margherita_c2p.hh IN margherita_c2p.hh
+INCLUDE HEADER: Margherita_M1.h IN Margherita_M1.h
+INCLUDE HEADER: Margherita_Weakhub.h IN Margherita_Weakhub.h
+
+USES INCLUDE: margherita_c2p.hh
+USES INCLUDE: Margherita_EOS.h
+USES INCLUDE: Margherita_Leak.h
+USES INCLUDE: Margherita_M1.h
+USES INCLUDE: EOS_Base.h
+USES INCLUDE: constexpr_utils.hh
+USES INCLUDE: Margherita_Weakhub.h

@@ -1,0 +1,6 @@
+F90=mpif90
+FFLAGS = -c
+CFLAGS = -O0
+LIBS = -lgfortran
+F90FLAGS = -ffree-form -O0 -fimplicit-none
+LINK= $(F90)  $(F90FLAGS)
