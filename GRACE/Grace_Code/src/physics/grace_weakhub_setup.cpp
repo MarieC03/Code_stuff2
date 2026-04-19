@@ -85,6 +85,28 @@ void initialize_weakhub_from_params() {
   read_dataset(file, "IVye", H5T_NATIVE_INT, &IVye);
   read_dataset(file, "IVymu", H5T_NATIVE_INT, &IVymu);
 
+#ifdef M1_NU_THREESPECIES
+  if (n_species != 3) {
+    H5Fclose(file);
+    throw std::runtime_error(
+        "The current GRACE build uses 3 M1 neutrino species, but the selected weakhub table "
+        "does not provide the required 3-spec layout.");
+  }
+#elif defined(M1_NU_FIVESPECIES)
+  if (n_species != 6) {
+    H5Fclose(file);
+    throw std::runtime_error(
+        "The current GRACE build uses 5 M1 neutrino species, but the selected weakhub table "
+        "does not provide the required 6-spec muonic layout.");
+  }
+  if (IVymu <= 0) {
+    H5Fclose(file);
+    throw std::runtime_error(
+        "The current GRACE build uses 5 M1 neutrino species, but the selected weakhub table "
+        "has no Y_mu dimension.");
+  }
+#endif
+
   std::vector<double> logrho(IVrho), logtemp(IVtemp), ye(IVye), logymu(std::max(IVymu,1));
   read_dataset(file, "logrho_IVtable", H5T_NATIVE_DOUBLE, logrho.data());
   read_dataset(file, "logtemp_IVtable", H5T_NATIVE_DOUBLE, logtemp.data());

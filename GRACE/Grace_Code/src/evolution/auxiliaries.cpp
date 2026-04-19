@@ -137,11 +137,7 @@ void compute_auxiliary_quantities(
         #endif 
         #endif 
         #ifdef GRACE_ENABLE_M1 
-        m1_eq_system.compute_auxiliaries<0>(VEC(i,j,k), q, dev_coords);
-        #ifdef M1_NU_THREESPECIES
-        m1_eq_system.compute_auxiliaries<1>(VEC(i,j,k), q, dev_coords);
-        m1_eq_system.compute_auxiliaries<2>(VEC(i,j,k), q, dev_coords);
-        #endif 
+        m1_eq_system.compute_auxiliaries(VEC(i,j,k), q, dev_coords);
         #endif 
         #ifdef GRACE_ENABLE_BSSN_METRIC
         bssn_eq_system(auxiliaries_computation_kernel_t{}, VEC(i,j,k), q, idx);

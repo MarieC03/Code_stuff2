@@ -165,7 +165,14 @@ static void set_m1_initial_data_impl(
             // metric 
             metric_array_t metric ; 
             FILL_METRIC_ARRAY(metric,state,q,i,j,k) ; 
-            // set id 
+            for (int ispec = 0; ispec < m1_num_species(); ++ispec) {
+                state(VEC(i,j,k),m1_evolved_index(ERAD_, ispec),q)  = 0.0;
+                state(VEC(i,j,k),m1_evolved_index(NRAD_, ispec),q)  = 0.0;
+                state(VEC(i,j,k),m1_evolved_index(FRADX_, ispec),q) = 0.0;
+                state(VEC(i,j,k),m1_evolved_index(FRADY_, ispec),q) = 0.0;
+                state(VEC(i,j,k),m1_evolved_index(FRADZ_, ispec),q) = 0.0;
+            }
+            // set id for the primary species
             state(VEC(i,j,k),ERAD_,q)  = metric.sqrtg() * id.erad ; 
             state(VEC(i,j,k),NRAD_,q)  = metric.sqrtg() * id.nrad ; 
             state(VEC(i,j,k),FRADX_,q) = metric.sqrtg() * id.fradx ; 

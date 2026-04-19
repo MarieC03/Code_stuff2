@@ -891,11 +891,11 @@ class leptonic_eos_4d_t : public eos_base_t<leptonic_eos_4d_t>
     {
         if (ymu < eos_ymumin) {
             ymu = eos_ymumin;
-            err.set(EOS_YE_TOO_LOW);
+            err.set(EOS_YMU_TOO_LOW);
         }
         if (ymu > eos_ymumax) {
             ymu = eos_ymumax;
-            err.set(EOS_YE_TOO_HIGH);
+            err.set(EOS_YMU_TOO_HIGH);
         }
     }
 

@@ -297,6 +297,7 @@ struct fugacity_state {
   double temp_mev{0.0};
 
   double mu_e{0.0};
+  double mu_mu{0.0};
   double mu_p{0.0};
   double mu_n{0.0};
   double Xa{0.0}, Xh{0.0}, Xn{0.0}, Xp{0.0};
@@ -401,6 +402,45 @@ struct tau_policy_local_spherical {
   }
 };
 
+template <typename eos_t>
+GRACE_HOST_DEVICE inline bool fill_fugacity_eos_state(
+    const eos_t& eos,
+    fugacity_state& F,
+    double& temp_eos,
+    double& rho_eos,
+    double& ye_eos,
+    double& ymu_eos,
+    typename eos_t::error_type& err)
+{
+  (void)ymu_eos;
+  F.mu_e = eos.mue_mup_mun_Xa_Xh_Xn_Xp_Abar_Zbar__temp_rho_ye(
+      F.mu_p, F.mu_n,
+      F.Xa, F.Xh, F.Xn, F.Xp,
+      F.Abar, F.Zbar,
+      temp_eos, rho_eos, ye_eos, err);
+  F.mu_mu = 0.0;
+  return false;
+}
+
+#ifdef GRACE_ENABLE_LEPTONIC_4D
+GRACE_HOST_DEVICE inline bool fill_fugacity_eos_state(
+    const leptonic_eos_4d_t& eos,
+    fugacity_state& F,
+    double& temp_eos,
+    double& rho_eos,
+    double& ye_eos,
+    double& ymu_eos,
+    leptonic_eos_4d_t::error_type& err)
+{
+  F.mu_e = eos.mue_mumu_mup_mun_Xa_Xh_Xn_Xp_Abar_Zbar__temp_rho_ye_ymu(
+      F.mu_mu, F.mu_p, F.mu_n,
+      F.Xa, F.Xh, F.Xn, F.Xp,
+      F.Abar, F.Zbar,
+      temp_eos, rho_eos, ye_eos, ymu_eos, err);
+  return true;
+}
+#endif
+
 template <typename eos_t, typename tau_policy_t>
 GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
     const eos_t& eos,
@@ -426,14 +466,10 @@ GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
   double rho_eos = rho_code;
   double T_eos   = temp_code;
   double ye_eos  = ye;
+  double ymu_eos = ymu;
   typename eos_t::error_type err = 0;
-    // TODO!! EOS framework and get chm. pot!
-  // Called it here like in FIL
-  F.mu_e = eos.mue_mup_mun_Xa_Xh_Xn_Xp_Abar_Zbar__temp_rho_ye(
-      F.mu_p, F.mu_n,
-      F.Xa, F.Xh, F.Xn, F.Xp,
-      F.Abar, F.Zbar,
-      T_eos, rho_eos, ye_eos, err);
+  const bool use_muonic_eos = fill_fugacity_eos_state(
+      eos, F, T_eos, rho_eos, ye_eos, ymu_eos, err);
 
   F.Xa = (F.Xa > 0.0 ? F.Xa : 0.0);
   F.Xh = (F.Xh > 0.0 ? F.Xh : 0.0);
@@ -449,9 +485,15 @@ GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
   const double mu_nue = F.mu_e + F.mu_p - F.mu_n - Qnp;
   const double mu_nuebar = -mu_nue;
 
-  // Muonic species: for muonic EOS. Default: mu=0.
-  const double mu_numu = 0.0;
-  const double mu_numubar = -mu_numu;
+  const double mu_numu_default = 0.0;
+  double mu_numu_loc = mu_numu_default;
+  double mu_numubar = -mu_numu_default;
+#ifdef M1_FIVESPECIES
+  if (use_muonic_eos) {
+    mu_numu_loc = F.mu_mu + F.mu_p - F.mu_n - Qnp;
+    mu_numubar = -mu_numu_loc;
+  }
+#endif
   const double mu_nux = 0.0;
 
   const double T = safe_pos(F.temp_mev);
@@ -459,7 +501,7 @@ GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
   F.eta_hat = mu_hat / T;
   F.eta_nu[NUE]     = mu_nue / T;
   F.eta_nu[NUEBAR]  = mu_nuebar / T;
-  F.eta_nu[NUMU]    = mu_numu / T;
+  F.eta_nu[NUMU]    = mu_numu_loc / T;
   F.eta_nu[NUMUBAR] = mu_numubar / T;
   F.eta_nu[NUX]     = mu_nux / T;
 
@@ -497,6 +539,16 @@ GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
     const double fac_numubar = 1.0 - Kokkos::exp(-F.tau_n[NUMUBAR]);
     if (::isfinite(fac_numu))    F.eta_nu[NUMU]    *= fac_numu;
     if (::isfinite(fac_numubar)) F.eta_nu[NUMUBAR] *= fac_numubar;
+    if (use_muonic_eos) {
+      if (F.tau_n[NUMU] < 1.0) F.eta_nu[NUMU] = 0.0;
+      if (F.tau_n[NUMUBAR] < 1.0) F.eta_nu[NUMUBAR] = 0.0;
+      if (F.rho_cgs < 1.0e11 || F.ymu < 5.0e-3) {
+        F.eta_nu[NUMU] = 0.0;
+        F.eta_nu[NUMUBAR] = 0.0;
+      }
+      F.eta_nu[NUMU] = Kokkos::fmax(-5.0, Kokkos::fmin(5.0, F.eta_nu[NUMU]));
+      F.eta_nu[NUMUBAR] = Kokkos::fmax(-5.0, Kokkos::fmin(5.0, F.eta_nu[NUMUBAR]));
+    }
 #endif
   }
 
@@ -612,15 +664,14 @@ GRACE_HOST_DEVICE inline void add_pair_process_emission(const fugacity_state& F,
 
   const double R_pair = pair_const * (ipow<2>(Cv - Ca) + ipow<2>(Cv + Ca)) /
                         (36.0 * block[NUE] * block[NUEBAR]);
-  if (::isfinite(R_pair) && (R_pair > 0.0)) {
-    out.R[NUE] += R_pair;
-    out.R[NUEBAR] += R_pair;
-    out.Q[NUE] += R_pair * eps_fraction;
-    out.Q[NUEBAR] += R_pair * eps_fraction;
-  }
+  (void)R_pair;
 
-  const double R_pair_x = (1.0/9.0) * pair_const * (ipow<2>(Cv - Ca) + ipow<2>(Cv + Ca - 2.0)) /
-                          (block[NUX] * block[NUX]);
+  double R_pair_x = (1.0/9.0) * pair_const * (ipow<2>(Cv - Ca) + ipow<2>(Cv + Ca - 2.0)) /
+                    (block[NUX] * block[NUX]);
+#ifdef M1_FIVESPECIES
+  // In 5-spec mode NUX carries only the tau/tau-bar contribution.
+  R_pair_x *= 0.5;
+#endif
   if (::isfinite(R_pair_x) && (R_pair_x > 0.0)) {
     out.R[NUX] += R_pair_x;
     out.Q[NUX] += R_pair_x * eps_fraction;
@@ -655,14 +706,13 @@ GRACE_HOST_DEVICE inline void add_plasmon_decay_emission(const fugacity_state& F
 
   const double R_gamma = ipow<2>(Cv) * gamma_const / (block[NUE] * block[NUEBAR]);
   const double Q_gamma = F.temp_mev * 0.5 * (2.0 + gamma * gamma / (1.0 + gamma));
-  if (::isfinite(R_gamma) && (R_gamma > 0.0)) {
-    out.R[NUE] += R_gamma;
-    out.R[NUEBAR] += R_gamma;
-    out.Q[NUE] += Q_gamma * R_gamma;
-    out.Q[NUEBAR] += Q_gamma * R_gamma;
-  }
+  (void)R_gamma;
 
-  const double R_gamma_x = 4.0 * ipow<2>(Cv - 1.0) * gamma_const / (block[NUX] * block[NUX]);
+  double R_gamma_x = 4.0 * ipow<2>(Cv - 1.0) * gamma_const / (block[NUX] * block[NUX]);
+#ifdef M1_FIVESPECIES
+  // In 5-spec mode NUX stores only the tau/tau-bar pair.
+  R_gamma_x *= 0.5;
+#endif
   if (::isfinite(R_gamma_x) && (R_gamma_x > 0.0)) {
     out.R[NUX] += R_gamma_x;
     out.Q[NUX] += Q_gamma * R_gamma_x;
@@ -686,36 +736,77 @@ GRACE_HOST_DEVICE inline void add_brems_emission(const fugacity_state& F, rates_
       0.231 * (2.0778e2 * erg_to_mev) * factorY * ipow<2>(F.rho_cgs) * ipow<4>(F.temp_mev) * Kokkos::sqrt(safe_pos(F.temp_mev));
   const double Q_brems = R_brems * F.temp_mev / 0.231 * 0.504;
   if (::isfinite(R_brems) && (R_brems > 0.0) && ::isfinite(Q_brems) && (Q_brems > 0.0)) {
-    out.R[NUX] += R_brems;
-    out.Q[NUX] += Q_brems;
+    double w_numu = 0.0;
+    double w_numubar = 0.0;
+    double w_nux = 4.0;
 #ifdef M1_FIVESPECIES
-    out.R[NUMU] += R_brems;
-    out.Q[NUMU] += Q_brems;
-    out.R[NUMUBAR] += R_brems;
-    out.Q[NUMUBAR] += Q_brems;
+    w_numu = 1.0;
+    w_numubar = 1.0;
+    w_nux = 2.0;
 #endif
+    out.R[NUMU] += w_numu * R_brems;
+    out.Q[NUMU] += w_numu * Q_brems;
+    out.R[NUMUBAR] += w_numubar * R_brems;
+    out.Q[NUMUBAR] += w_numubar * Q_brems;
+    out.R[NUX] += w_nux * R_brems;
+    out.Q[NUX] += w_nux * Q_brems;
   }
 }
 
-GRACE_HOST_DEVICE inline void apply_kirchhoff(const fugacity_state& F,
-                                             const std::array<double, NUMSPECIES>& g_nu,
-                                             rates_accum& out) {
-  for (int i = NUE; i <= NUX; ++i) {
+GRACE_HOST_DEVICE inline void calc_kirchhoff_emission_species(
+    const fugacity_state& F,
+    const std::array<double, NUMSPECIES>& g_nu,
+    const std::array<double, NUMSPECIES>& kappa_a,
+    const std::array<double, NUMSPECIES>& kappa_n,
+    int s,
+    std::array<double, NUMSPECIES>& Q_out,
+    std::array<double, NUMSPECIES>& R_out) {
+  if (!(g_nu[s] > 0.0)) return;
+  const double Ber_eq = black_body_energy(g_nu[s], F.temp_mev, F.eta_nu[s]);
+  const double Bn_eq = black_body_number(g_nu[s], F.temp_mev, F.eta_nu[s]);
+  const double Q_eq = kappa_a[s] * Ber_eq;
+  const double R_eq = kappa_n[s] * Bn_eq;
+  if (finite_pos(Q_eq)) Q_out[s] = Q_eq;
+  if (finite_pos(R_eq)) R_out[s] = R_eq;
+}
 
-    const double Ber_eq = black_body_energy(g_nu[i], F.temp_mev, F.eta_nu[i]);
-    const double invBer = safe_inv_pos_finite(Ber_eq);
+GRACE_HOST_DEVICE inline void calc_kirchhoff_emission(
+    const fugacity_state& F,
+    const std::array<double, NUMSPECIES>& g_nu,
+    const std::array<double, NUMSPECIES>& kappa_a,
+    const std::array<double, NUMSPECIES>& kappa_n,
+    bool include_heavy_species,
+    std::array<double, NUMSPECIES>& Q_out,
+    std::array<double, NUMSPECIES>& R_out) {
+  calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUE, Q_out, R_out);
+  calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUEBAR, Q_out, R_out);
 
-    // If invBer==0 -> k_a becomes 0 (no divide, no branch)
-    const double k_a = out.Q[i] * invBer;
-    // Store only if k_a >0 drop this if out.Q is finite I guess
-    if (finite_pos(k_a)) out.kappa_a[i] = k_a;
+  if (!include_heavy_species) return;
 
-    const double Bn_eq = black_body_number(g_nu[i], F.temp_mev, F.eta_nu[i]);
-    const double invBn = safe_inv_pos_finite(Bn_eq);
+#ifdef M1_FIVESPECIES
+  calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUMU, Q_out, R_out);
+  calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUMUBAR, Q_out, R_out);
+#endif
+  calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUX, Q_out, R_out);
+}
 
-    const double k_n = out.R[i] * invBn;
-    if (finite_pos(k_n)) out.kappa_n[i] = k_n;
-  }
+GRACE_HOST_DEVICE inline void add_kirchhoff_absorption_opacity_species_from_QR(
+    const fugacity_state& F,
+    const std::array<double, NUMSPECIES>& g_nu,
+    const std::array<double, NUMSPECIES>& Q_in,
+    const std::array<double, NUMSPECIES>& R_in,
+    int s,
+    std::array<double, NUMSPECIES>& kappa_a_add,
+    std::array<double, NUMSPECIES>& kappa_n_add) {
+  if (!(g_nu[s] > 0.0)) return;
+  const double Ber_eq = black_body_energy(g_nu[s], F.temp_mev, F.eta_nu[s]);
+  const double Bn_eq = black_body_number(g_nu[s], F.temp_mev, F.eta_nu[s]);
+  const double invBer = safe_inv_pos_finite(Ber_eq);
+  const double invBn = safe_inv_pos_finite(Bn_eq);
+  const double ka = Q_in[s] * invBer;
+  const double kn = R_in[s] * invBn;
+  kappa_a_add[s] = finite_pos(ka) ? ka : 0.0;
+  kappa_n_add[s] = finite_pos(kn) ? kn : 0.0;
 }
 
 GRACE_HOST_DEVICE inline void add_kirchhoff_absorption_opacity_from_QR(
@@ -725,24 +816,20 @@ GRACE_HOST_DEVICE inline void add_kirchhoff_absorption_opacity_from_QR(
     const std::array<double, NUMSPECIES>& R_in,
     std::array<double, NUMSPECIES>& kappa_a_add,
     std::array<double, NUMSPECIES>& kappa_n_add) {
-  for (int s = NUE; s <= NUX; ++s) {
-    const double Ber_eq = black_body_energy(g_nu[s], F.temp_mev, F.eta_nu[s]);
-    const double Bn_eq = black_body_number(g_nu[s], F.temp_mev, F.eta_nu[s]);
-    const double invBer = safe_inv_pos_finite(Ber_eq);
-    const double invBn = safe_inv_pos_finite(Bn_eq);
-    const double ka = Q_in[s] * invBer;
-    const double kn = R_in[s] * invBn;
-    kappa_a_add[s] = finite_pos(ka) ? ka : 0.0;
-    kappa_n_add[s] = finite_pos(kn) ? kn : 0.0;
-  }
+#ifdef M1_FIVESPECIES
+  add_kirchhoff_absorption_opacity_species_from_QR(F, g_nu, Q_in, R_in, NUMU, kappa_a_add, kappa_n_add);
+  add_kirchhoff_absorption_opacity_species_from_QR(F, g_nu, Q_in, R_in, NUMUBAR, kappa_a_add, kappa_n_add);
+#endif
+  add_kirchhoff_absorption_opacity_species_from_QR(F, g_nu, Q_in, R_in, NUX, kappa_a_add, kappa_n_add);
 }
 
 // -----------------------------------------------------------------------------
 // compute opacities/emissivities for one species.
 // -----------------------------------------------------------------------------
 
-template <typename tau_policy_t>
+template <typename eos_t, typename tau_policy_t>
 GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species_weakhub(
+    const eos_t& eos,
     const grace::weakhub::device_handle& weakhub,
     double rho_code,
     double temp_code,
@@ -756,16 +843,7 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species_weakhub(
     const tau_policy_t& tau_policy,
     bool apply_temp_correction)
 {
-  fugacity_state F{};
-  F.rho_code = rho_code;
-  F.temp_code = temp_code;
-  F.ye = ye;
-  F.ymu = ymu;
-  F.mass_scale = mass_scale;
-  F.rho_cgs = rho_code_to_cgs(rho_code, mass_scale);
-  F.temp_mev = temp_code_to_mev(temp_code);
-  F.eta_nu.fill(0.0);
-  F.tau_n.fill(0.0);
+  fugacity_state F = make_fugacity_state(eos, rho_code, temp_code, ye, ymu, mass_scale, xyz_code, tau_policy);
 
   const auto tbl = weakhub.lookup(F.rho_cgs, F.temp_mev, ye, ymu);
   rates_accum rates{};
@@ -779,12 +857,7 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species_weakhub(
 #ifdef M1_FIVESPECIES
   g_nu = {{1,1,1,1,2}};
 #endif
-  for (int s = NUE; s <= NUX; ++s) {
-    const double Ber_eq = black_body_energy(g_nu[s], F.temp_mev, F.eta_nu[s]);
-    const double Bn_eq = black_body_number(g_nu[s], F.temp_mev, F.eta_nu[s]);
-    rates.Q[s] = rates.kappa_a[s] * Ber_eq;
-    rates.R[s] = rates.kappa_n[s] * Bn_eq;
-  }
+  calc_kirchhoff_emission(F, g_nu, rates.kappa_a, rates.kappa_n, true, rates.Q, rates.R);
 
   rates_accum extra{};
   if (pair_annihilation) add_pair_process_emission(F, extra);
@@ -824,18 +897,18 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species_weakhub(
           if (fact < 1.0) fact = 1.0;
         }
         if (Kokkos::isfinite(fact) && fact > 0.0) {
-         // TODO is it correct like that?
-          if(s == NUX){            
-             rates.kappa_s[s] *= fact;
-          }else{
-             rates.Q[s]       *= fact;
-             rates.R[s]       *= fact;
-             rates.kappa_a[s] *= fact;
-             rates.kappa_n[s] *= fact;
-             rates.kappa_s[s] *= fact;
+          // Match FIL's species-dependent scaling: the aggregated heavy-lepton
+          // NUX channel only rescales scattering, while explicit species rescale
+          // emissivities and absorptions as well.
+          if (s == NUX) {
+            rates.kappa_s[s] *= fact;
+          } else {
+            rates.Q[s]       *= fact;
+            rates.R[s]       *= fact;
+            rates.kappa_a[s] *= fact;
+            rates.kappa_n[s] *= fact;
+            rates.kappa_s[s] *= fact;
           }
-          //rates.Q[s] *= fact; rates.R[s] *= fact;
-          //rates.kappa_a[s] *= fact; rates.kappa_n[s] *= fact; rates.kappa_s[s] *= fact;
         }
       }
     }
@@ -880,9 +953,8 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species(
 {
   fugacity_state F = make_fugacity_state(eos, rho_code, temp_code, ye, ymu, mass_scale, xyz_code, tau_policy);
 
-  rates_accum rates;
+  rates_accum rates{};
   if (beta_decay) {
-    add_charged_current_emission(F, rates);
     add_charged_current_absorption_opacity(F, rates);
   }
   add_scattering_opacity(F, rates);
@@ -894,7 +966,13 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species(
 #ifdef M1_FIVESPECIES
   g_nu = {{1,1,1,1,2}};
 #endif
-  apply_kirchhoff(F, g_nu, rates);
+  std::array<double, NUMSPECIES> kappa_a_add{{0,0,0,0,0}}, kappa_n_add{{0,0,0,0,0}};
+  add_kirchhoff_absorption_opacity_from_QR(F, g_nu, rates.Q, rates.R, kappa_a_add, kappa_n_add);
+  if (beta_decay) calc_kirchhoff_emission(F, g_nu, rates.kappa_a, rates.kappa_n, false, rates.Q, rates.R);
+  for (int s = NUE; s <= NUX; ++s) {
+    rates.kappa_a[s] += kappa_a_add[s];
+    rates.kappa_n[s] += kappa_n_add[s];
+  }
 
   // Tau post-estimate (optional; now not stored)
   // TODO implement proper tau path integral handeling here
@@ -909,8 +987,8 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species(
       const double Rloc = rates.R[s];
       const double Qloc = rates.Q[s];
       if (Rloc > 0.0 && Qloc > 0.0) {
-        // TODO: calculate eps from W(E-Fv)/N
-        // here eps just approximate
+        // This kernel only has local rates available, so use the local emissivity
+        // mean energy to build the same FIL-style temperature correction factor.
         const double eps_mev = Qloc / Rloc;
         const double Tnu_mev = fermi::FDR<2,3>::get(F.eta_nu[s]) * eps_mev;
         const double Tf_mev  = safe_pos(F.temp_mev);
@@ -921,15 +999,17 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species(
           if (fact < 1.0) fact = 1.0;
         }
         if (::isfinite(fact) && fact > 0.0) {
-          // TODO is it correct like that?
-          if(s == NUX){            
-             rates.kappa_s[s] *= fact;
-          }else{
-             rates.Q[s]       *= fact;
-             rates.R[s]       *= fact;
-             rates.kappa_a[s] *= fact;
-             rates.kappa_n[s] *= fact;
-             rates.kappa_s[s] *= fact;
+          // Match FIL's species-dependent scaling: the aggregated heavy-lepton
+          // NUX channel only rescales scattering, while explicit species rescale
+          // emissivities and absorptions as well.
+          if (s == NUX) {
+            rates.kappa_s[s] *= fact;
+          } else {
+            rates.Q[s]       *= fact;
+            rates.R[s]       *= fact;
+            rates.kappa_a[s] *= fact;
+            rates.kappa_n[s] *= fact;
+            rates.kappa_s[s] *= fact;
           }
         }
       }

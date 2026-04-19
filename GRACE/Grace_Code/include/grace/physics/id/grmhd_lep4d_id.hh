@@ -17,23 +17,24 @@
 #include <grace/physics/eos/eos_storage_lep4d.hh>
 #include <grace/physics/eos/leptonic_eos_4d.hh>
 #include <grace/utils/grace_utils.hh>
+#include <grace/utils/rootfinding.hh>
 
 #include <Kokkos_Core.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace grace {
 
-inline void
+GRACE_HOST_DEVICE inline void
 find_beta_eq_ye_ymu(double& ye_eq, double& ymu_eq,
                     double rho, double temp,
                     leptonic_eos_4d_t const& eos)
 {
-    eos_err_t err;
-    rho = std::max(eos.density_minimum(), std::min(eos.density_maximum(), rho));
-    temp = std::max(eos.temp_atmosphere() * 0.0 + std::exp(eos.ltempmin),
-                    std::min(std::exp(eos.ltempmax), temp));
+    rho = Kokkos::fmax(eos.density_minimum(), Kokkos::fmin(eos.density_maximum(), rho));
+    temp = Kokkos::fmax(Kokkos::exp(eos.ltempmin),
+                        Kokkos::fmin(Kokkos::exp(eos.ltempmax), temp));
 
     double const yemin = eos.get_c2p_ye_min();
     double const yemax = eos.get_c2p_ye_max();
@@ -49,6 +50,13 @@ find_beta_eq_ye_ymu(double& ye_eq, double& ymu_eq,
                 mumu_dummy, mup, mun, templ, rhol, yel, ymul, lerr);
             return mun - mup - mue;
         };
+        double const fin = residual_inner(yemin);
+        double const fax = residual_inner(yemax);
+        if (!::isfinite(fin)) return ::isfinite(fax) ? yemax : yemin;
+        if (!::isfinite(fax)) return yemin;
+        if (fin * fax > 0.0) {
+            return (Kokkos::fabs(fin) < Kokkos::fabs(fax)) ? yemin : yemax;
+        }
         return utils::brent(residual_inner, yemin, yemax, 1e-14);
     };
 
@@ -64,8 +72,12 @@ find_beta_eq_ye_ymu(double& ye_eq, double& ymu_eq,
 
     double const fmin = residual_outer(ymumin);
     double const fmax = residual_outer(ymumax);
-    if (fmin * fmax > 0.0) {
-        ymu_eq = (std::fabs(fmin) < std::fabs(fmax)) ? ymumin : ymumax;
+    if (!::isfinite(fmin)) {
+        ymu_eq = ::isfinite(fmax) ? ymumax : ymumin;
+    } else if (!::isfinite(fmax)) {
+        ymu_eq = ymumin;
+    } else if (fmin * fmax > 0.0) {
+        ymu_eq = (Kokkos::fabs(fmin) < Kokkos::fabs(fmax)) ? ymumin : ymumax;
     } else {
         ymu_eq = utils::brent(residual_outer, ymumin, ymumax, 1e-14);
     }
@@ -95,6 +107,8 @@ set_ymustar_from_beta_eq(leptonic_eos_4d_t const& eos,
         KOKKOS_LAMBDA(VEC(int const& i, int const& j, int const& k), int const& q) {
             double const dens = state(VEC(i, j, k), DENS_, q);
             if (dens <= 0.0) {
+                aux(VEC(i, j, k), YE_, q) = ye_atm;
+                state(VEC(i, j, k), YESTAR_, q) = 0.0;
                 aux(VEC(i, j, k), YMU_, q) = ymu_atm;
                 state(VEC(i, j, k), YMUSTAR_, q) = 0.0;
                 return;
@@ -112,17 +126,43 @@ set_ymustar_from_beta_eq(leptonic_eos_4d_t const& eos,
 
             double ymu_loc = ymu_atm;
             if (rho_loc > rho_fl * (1.0 + atmo_tol)) {
-                ymu_loc = eos.get_c2p_ymu_min();
-                eos_err_t lerr;
-                double rhol{rho_loc}, templ{temp_loc}, yel{ye_loc}, ymul{ymu_loc};
-                double const mumu = eos.mumu__temp_rho_ye_ymu(templ, rhol, yel, ymul, lerr);
-                double const mue = eos.mue__temp_rho_ye_ymu(templ, rhol, yel, ymul, lerr);
-                if (mumu > mue) {
-                    ymu_loc = 0.5 * (eos.get_c2p_ymu_min() + eos.get_c2p_ymu_max());
+                auto residual_mu = [&](double ymu_trial) {
+                    eos_err_t lerr;
+                    double rhol{rho_loc}, templ{temp_loc}, yel{ye_loc}, ymul{ymu_trial};
+                    double const mumu = eos.mumu__temp_rho_ye_ymu(templ, rhol, yel, ymul, lerr);
+                    double const mue = eos.mue__temp_rho_ye_ymu(templ, rhol, yel, ymul, lerr);
+                    if (lerr.any() || !::isfinite(mumu) || !::isfinite(mue)) {
+                        return std::numeric_limits<double>::quiet_NaN();
+                    }
+                    return mumu - mue;
+                };
+
+                double const fmin = residual_mu(eos.get_c2p_ymu_min());
+                double const fmax = residual_mu(eos.get_c2p_ymu_max());
+                if (!::isfinite(fmin)) {
+                    ymu_loc = ::isfinite(fmax) ? eos.get_c2p_ymu_max() : ymu_atm;
+                } else if (!::isfinite(fmax)) {
+                    ymu_loc = eos.get_c2p_ymu_min();
+                } else if (fmin == 0.0) {
+                    ymu_loc = eos.get_c2p_ymu_min();
+                } else if (fmax == 0.0) {
+                    ymu_loc = eos.get_c2p_ymu_max();
+                } else if (fmin * fmax > 0.0) {
+                    ymu_loc = (Kokkos::fabs(fmin) < Kokkos::fabs(fmax))
+                                  ? eos.get_c2p_ymu_min()
+                                  : eos.get_c2p_ymu_max();
+                } else {
+                    ymu_loc = utils::brent(
+                        residual_mu,
+                        eos.get_c2p_ymu_min(),
+                        eos.get_c2p_ymu_max(),
+                        1e-14);
                 }
             } else {
-                aux(VEC(i, j, k), YE_, q) = ye_atm;
-                state(VEC(i, j, k), YESTAR_, q) = dens * ye_atm;
+                ye_loc = ye_atm;
+                ymu_loc = ymu_atm;
+                aux(VEC(i, j, k), YE_, q) = ye_loc;
+                state(VEC(i, j, k), YESTAR_, q) = dens * ye_loc;
             }
 
             aux(VEC(i, j, k), YMU_, q) = ymu_loc;

@@ -277,7 +277,7 @@ static void set_grmhd_initial_data_impl(arg_t ... kernel_args)
                     // set ye 
                     aux(VEC(i,j,k),YE_,q) = id.ye ; 
                     #ifdef GRACE_ENABLE_LEPTONIC_4D
-                    aux(VEC(i,j,k),YMU_,q) = _eos.get_c2p_ymu_atm();
+                    aux(VEC(i,j,k),YMU_,q) = id.ymu ;
                     #endif
        
                     /* Set eps temp and entropy */

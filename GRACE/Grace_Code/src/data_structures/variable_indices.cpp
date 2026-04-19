@@ -3,25 +3,25 @@
  * @author Carlo Musolino (musolino@itp.uni-frankfurt.de)
  * @brief Macros galore.
  * @date 2024-03-12
- * 
+ *
  * @copyright This file is part of GRACE.
  * GRACE is an evolution framework that uses Finite Volume
  * methods to simulate relativistic spacetimes and plasmas
  * Copyright (C) 2023 Carlo Musolino
- *                                    
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * any later version.
- *   
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *   
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- * 
+ *
  */
 
 #include <code_modules.h>
@@ -37,10 +37,10 @@
 
 #include <Kokkos_Core.hpp>
 
-#include <string> 
+#include <string>
 #include <sstream>
 
-namespace grace { namespace variables { 
+namespace grace { namespace variables {
 
 namespace detail {
 
@@ -53,8 +53,8 @@ namespace detail {
 /****************************************************/
 /* These mappings go idx -> name                    */
 /****************************************************/
-std::vector<std::string> _varnames ; 
-std::vector<std::string> _auxnames ; 
+std::vector<std::string> _varnames ;
+std::vector<std::string> _auxnames ;
 
 std::vector<std::string> _facex_staggered_varnames ;
 
@@ -62,13 +62,13 @@ std::vector<std::string> _facey_staggered_varnames ;
 
 std::vector<std::string> _facez_staggered_varnames ;
 
-std::vector<std::string> _edgexy_staggered_varnames ; 
+std::vector<std::string> _edgexy_staggered_varnames ;
 
-std::vector<std::string> _edgexz_staggered_varnames ; 
+std::vector<std::string> _edgexz_staggered_varnames ;
 
-std::vector<std::string> _edgeyz_staggered_varnames ; 
+std::vector<std::string> _edgeyz_staggered_varnames ;
 
-std::vector<std::string> _corner_staggered_varnames ; 
+std::vector<std::string> _corner_staggered_varnames ;
 /****************************************************/
 /****************************************************/
 
@@ -118,23 +118,23 @@ std::vector<grace::var_amr_interp_t> _corner_vars_interp_types ;
 
 /****************************************************/
 /****************************************************/
-std::unordered_map<std::string, variable_properties_t<GRACE_NSPACEDIM>> 
-    _varprops; 
-std::unordered_map<std::string, variable_properties_t<GRACE_NSPACEDIM>> 
-    _auxprops; 
+std::unordered_map<std::string, variable_properties_t<GRACE_NSPACEDIM>>
+    _varprops;
+std::unordered_map<std::string, variable_properties_t<GRACE_NSPACEDIM>>
+    _auxprops;
 
 static bc_t get_bc_type(std::string const& bc_string)
 {
     if ( bc_string == "outgoing" ) {
         return bc_t::BC_OUTFLOW ;
     } else if ( bc_string == "third_order_lagrange") {
-        return bc_t::BC_LAGRANGE_EXTRAP ; 
-    } else if ( bc_string == "sommerfeld") { 
-        return bc_t::BC_SOMMERFELD ; 
+        return bc_t::BC_LAGRANGE_EXTRAP ;
+    } else if ( bc_string == "sommerfeld") {
+        return bc_t::BC_SOMMERFELD ;
     } else if ( bc_string == "none" ) {
-        return bc_t::BC_NONE ; 
+        return bc_t::BC_NONE ;
     } else{
-        ERROR("Invalid bc_type string " << bc_string) ; 
+        ERROR("Invalid bc_type string " << bc_string) ;
     }
 }
 
@@ -143,278 +143,306 @@ static var_amr_interp_t get_interp_type(std::string const& interp_string)
     if ( interp_string == "second_order" ) {
         return var_amr_interp_t::INTERP_SECOND_ORDER ;
     } else if ( interp_string == "fourth_order") {
-        return var_amr_interp_t::INTERP_FOURTH_ORDER ; 
-    } else if ( interp_string == "div_preserving") { 
-        return var_amr_interp_t::INTERP_DIV_PRESERVING ; 
+        return var_amr_interp_t::INTERP_FOURTH_ORDER ;
+    } else if ( interp_string == "div_preserving") {
+        return var_amr_interp_t::INTERP_DIV_PRESERVING ;
     } else if ( interp_string == "none" ) {
-        return var_amr_interp_t::INTERP_NONE ; 
+        return var_amr_interp_t::INTERP_NONE ;
     } else{
-        ERROR("Invalid prolongation/restriction string " << interp_string) ; 
+        ERROR("Invalid prolongation/restriction string " << interp_string) ;
     }
 }
 
 static var_staggering_t get_staggering(std::array<bool,3> s) {
-    return static_cast<var_staggering_t>(static_cast<uint8_t>(s[0]) + (static_cast<uint8_t>(s[1])<<1) + (static_cast<uint8_t>(s[2])<<2)) ; 
+    return static_cast<var_staggering_t>(static_cast<uint8_t>(s[0]) + (static_cast<uint8_t>(s[1])<<1) + (static_cast<uint8_t>(s[2])<<2)) ;
 }
 
 } /* namespace grace::variables::detail */
 
 static void register_evolved_scalar(
-    int const idx, 
-    std::string const& name, 
-    bc_t bc, 
-    std::string const& interp) 
+    int const idx,
+    std::string const& name,
+    bc_t bc,
+    std::string const& interp)
 {
-    auto itp = detail::get_interp_type(interp) ; 
-    detail::_varnames[idx]         = name   ; 
-    detail::_var_bc_types[idx]     = bc     ; 
+    auto itp = detail::get_interp_type(interp) ;
+    detail::_varnames[idx]         = name   ;
+    detail::_var_bc_types[idx]     = bc     ;
     detail::_var_interp_types[idx] = itp    ;
-    variable_properties_t<GRACE_NSPACEDIM> props ; 
+    variable_properties_t<GRACE_NSPACEDIM> props ;
     props.name = name ;
-    props.bc_type = bc ; 
-    props.interp_op_kind = itp ; 
-    props.is_evolved = true ; 
-    props.is_vector = props.is_tensor = false ; 
-    props.comp_num = -1 ; 
+    props.bc_type = bc ;
+    props.interp_op_kind = itp ;
+    props.is_evolved = true ;
+    props.is_vector = props.is_tensor = false ;
+    props.comp_num = -1 ;
     props.index = idx ;
     props.staggering = var_staggering_t::STAG_CENTER;
 
-    detail::_varprops[name] = props ; 
-} ; 
+    detail::_varprops[name] = props ;
+} ;
 
 static void register_evolved_vector(
     std::array<int,3> const& idxs,
-    std::string const& name, 
-    bc_t bc, 
-    std::string const& interp) 
+    std::string const& name,
+    bc_t bc,
+    std::string const& interp)
 {
-    auto itp = detail::get_interp_type(interp) ; 
+    auto itp = detail::get_interp_type(interp) ;
     for ( int ic=0; ic<3; ++ic) {
-        auto idx = idxs[ic] ; 
-        std::string const cname = name  + "[" + std::to_string(ic) + "]"; 
+        auto idx = idxs[ic] ;
+        std::string const cname = name  + "[" + std::to_string(ic) + "]";
         detail::_varnames[idx]         = cname  ;
-        detail::_var_bc_types[idx]     = bc     ; 
+        detail::_var_bc_types[idx]     = bc     ;
         detail::_var_interp_types[idx] = itp    ;
 
-        variable_properties_t<GRACE_NSPACEDIM> props ; 
+        variable_properties_t<GRACE_NSPACEDIM> props ;
         props.name = name ;
-        props.bc_type = bc ; 
-        props.interp_op_kind = itp ; 
-        props.is_evolved = true ; 
-        props.is_vector = true ; 
-        props.is_tensor = false ; 
-        props.comp_num = ic ; 
+        props.bc_type = bc ;
+        props.interp_op_kind = itp ;
+        props.is_evolved = true ;
+        props.is_vector = true ;
+        props.is_tensor = false ;
+        props.comp_num = ic ;
         props.index = idx ;
         props.staggering = var_staggering_t::STAG_CENTER;
 
-        detail::_varprops[cname] = props ; 
-    }        
+        detail::_varprops[cname] = props ;
+    }
 } ;
 
 static void register_evolved_tensor(
     std::array<int,6> const& idxs,
-    std::string const& name, 
-    bc_t bc, 
-    std::string const& interp) 
+    std::string const& name,
+    bc_t bc,
+    std::string const& interp)
 {
-    auto itp = detail::get_interp_type(interp) ; 
+    auto itp = detail::get_interp_type(interp) ;
     int cmp=0;
     for ( int ic=0; ic<3; ++ic) {
         for( int jc=ic; jc<3; ++jc) {
-            auto idx = idxs[cmp] ; 
-            std::string const cname = name  + "[" + std::to_string(ic) + "," + std::to_string(jc) + "]"; 
+            auto idx = idxs[cmp] ;
+            std::string const cname = name  + "[" + std::to_string(ic) + "," + std::to_string(jc) + "]";
             detail::_varnames[idx]         = cname  ;
-            detail::_var_bc_types[idx]     = bc     ; 
+            detail::_var_bc_types[idx]     = bc     ;
             detail::_var_interp_types[idx] = itp    ;
-            variable_properties_t<GRACE_NSPACEDIM> props ; 
+            variable_properties_t<GRACE_NSPACEDIM> props ;
             props.name = name ;
-            props.bc_type = bc ; 
-            props.interp_op_kind = itp ; 
-            props.is_evolved = true ; 
+            props.bc_type = bc ;
+            props.interp_op_kind = itp ;
+            props.is_evolved = true ;
             props.is_vector = false ;
-            props.is_tensor = true ; 
-            props.comp_num = cmp ; 
+            props.is_tensor = true ;
+            props.comp_num = cmp ;
             props.index = idx ;
             props.staggering = var_staggering_t::STAG_CENTER;
 
-            detail::_varprops[cname] = props ; 
+            detail::_varprops[cname] = props ;
 
-            cmp++ ; 
-        }   
-    }        
+            cmp++ ;
+        }
+    }
 } ;
 
 
 static void register_aux_scalar(
-    int const idx, 
-    std::string const& name) 
+    int const idx,
+    std::string const& name)
 {
-    detail::_auxnames[idx]         = name   ; 
-    variable_properties_t<GRACE_NSPACEDIM> props ; 
+    detail::_auxnames[idx]         = name   ;
+    variable_properties_t<GRACE_NSPACEDIM> props ;
     props.name = name ;
-    props.is_evolved = false ; 
-    props.is_vector = props.is_tensor = false ; 
-    props.comp_num = -1 ; 
+    props.is_evolved = false ;
+    props.is_vector = props.is_tensor = false ;
+    props.comp_num = -1 ;
     props.index = idx ;
     props.staggering = var_staggering_t::STAG_CENTER;
 
-    detail::_auxprops[name] = props ; 
-} ; 
+    detail::_auxprops[name] = props ;
+} ;
 
 static void register_aux_vector(
     std::array<int,3> const& idxs,
-    std::string const& name) 
+    std::string const& name)
 {
     for ( int ic=0; ic<3; ++ic) {
-        auto idx = idxs[ic] ; 
-        std::string const cname = name  + "[" + std::to_string(ic) + "]"; 
+        auto idx = idxs[ic] ;
+        std::string const cname = name  + "[" + std::to_string(ic) + "]";
         detail::_auxnames[idx]         = cname  ;
 
-        variable_properties_t<GRACE_NSPACEDIM> props ; 
+        variable_properties_t<GRACE_NSPACEDIM> props ;
         props.name = name ;
-        props.is_evolved = false ; 
-        props.is_vector = true ; 
-        props.is_tensor = false ; 
-        props.comp_num = ic ; 
+        props.is_evolved = false ;
+        props.is_vector = true ;
+        props.is_tensor = false ;
+        props.comp_num = ic ;
         props.index = idx ;
         props.staggering = var_staggering_t::STAG_CENTER;
 
-        detail::_auxprops[cname] = props ; 
-    }        
+        detail::_auxprops[cname] = props ;
+    }
 } ;
 
 static void register_aux_tensor(
     std::array<int,6> const& idxs,
-    std::string const& name) 
+    std::string const& name)
 {
     int cmp=0;
     for ( int ic=0; ic<3; ++ic) {
         for( int jc=ic; jc<3; ++jc) {
-            auto idx = idxs[cmp] ; 
-            std::string const cname = name  + "[" + std::to_string(ic) + "," + std::to_string(jc) + "]"; 
+            auto idx = idxs[cmp] ;
+            std::string const cname = name  + "[" + std::to_string(ic) + "," + std::to_string(jc) + "]";
             detail::_auxnames[idx]         = cname  ;
-            variable_properties_t<GRACE_NSPACEDIM> props ; 
+            variable_properties_t<GRACE_NSPACEDIM> props ;
             props.name = name ;
-            props.is_evolved = false ; 
+            props.is_evolved = false ;
             props.is_vector = false ;
-            props.is_tensor = true ; 
-            props.comp_num = cmp ; 
+            props.is_tensor = true ;
+            props.comp_num = cmp ;
             props.index = idx ;
             props.staggering = var_staggering_t::STAG_CENTER;
 
-            detail::_auxprops[cname] = props ; 
+            detail::_auxprops[cname] = props ;
 
-            cmp++ ; 
-        }   
-    }        
+            cmp++ ;
+        }
+    }
 } ;
 
 static void register_evolved_vector_fc(
     std::array<int,3> const& idxs,
-    std::string const& name, 
-    bc_t bc, 
-    std::string const& interp) 
+    std::string const& name,
+    bc_t bc,
+    std::string const& interp)
 {
-    auto itp = detail::get_interp_type(interp) ; 
+    auto itp = detail::get_interp_type(interp) ;
     {
-        auto idx = idxs[0] ; 
-        std::string const cname = name  + "[0]"; 
+        auto idx = idxs[0] ;
+        std::string const cname = name  + "[0]";
         detail::_facex_staggered_varnames[idx] = cname  ;
-        detail::_facex_vars_bc_types[idx]      = bc     ; 
+        detail::_facex_vars_bc_types[idx]      = bc     ;
         detail::_facex_vars_interp_types[idx]  = itp    ;
 
-        variable_properties_t<GRACE_NSPACEDIM> props ; 
+        variable_properties_t<GRACE_NSPACEDIM> props ;
         props.name = name ;
-        props.bc_type = bc ; 
-        props.interp_op_kind = itp ; 
-        props.is_evolved = true ; 
-        props.is_vector = true ; 
-        props.is_tensor = false ; 
-        props.comp_num = 0 ; 
+        props.bc_type = bc ;
+        props.interp_op_kind = itp ;
+        props.is_evolved = true ;
+        props.is_vector = true ;
+        props.is_tensor = false ;
+        props.comp_num = 0 ;
         props.index = idx ;
         props.staggering = var_staggering_t::STAG_FACEX;
 
-        detail::_varprops[cname] = props ; 
+        detail::_varprops[cname] = props ;
     }
     {
-        auto idx = idxs[1] ; 
-        std::string const cname = name  + "[1]"; 
+        auto idx = idxs[1] ;
+        std::string const cname = name  + "[1]";
         detail::_facey_staggered_varnames[idx] = cname  ;
-        detail::_facey_vars_bc_types[idx]      = bc     ; 
+        detail::_facey_vars_bc_types[idx]      = bc     ;
         detail::_facey_vars_interp_types[idx]  = itp    ;
 
-        variable_properties_t<GRACE_NSPACEDIM> props ; 
+        variable_properties_t<GRACE_NSPACEDIM> props ;
         props.name = name ;
-        props.bc_type = bc ; 
-        props.interp_op_kind = itp ; 
-        props.is_evolved = true ; 
-        props.is_vector = true ; 
-        props.is_tensor = false ; 
-        props.comp_num = 1 ; 
+        props.bc_type = bc ;
+        props.interp_op_kind = itp ;
+        props.is_evolved = true ;
+        props.is_vector = true ;
+        props.is_tensor = false ;
+        props.comp_num = 1 ;
         props.index = idx ;
         props.staggering = var_staggering_t::STAG_FACEY;
 
-        detail::_varprops[cname] = props ; 
+        detail::_varprops[cname] = props ;
     }
     {
-        auto idx = idxs[2] ; 
-        std::string const cname = name  + "[2]"; 
+        auto idx = idxs[2] ;
+        std::string const cname = name  + "[2]";
         detail::_facez_staggered_varnames[idx] = cname  ;
-        detail::_facez_vars_bc_types[idx]      = bc     ; 
+        detail::_facez_vars_bc_types[idx]      = bc     ;
         detail::_facez_vars_interp_types[idx]  = itp    ;
 
-        variable_properties_t<GRACE_NSPACEDIM> props ; 
+        variable_properties_t<GRACE_NSPACEDIM> props ;
         props.name = name ;
-        props.bc_type = bc ; 
-        props.interp_op_kind = itp ; 
-        props.is_evolved = true ; 
-        props.is_vector = true ; 
-        props.is_tensor = false ; 
-        props.comp_num = 2 ; 
+        props.bc_type = bc ;
+        props.interp_op_kind = itp ;
+        props.is_evolved = true ;
+        props.is_vector = true ;
+        props.is_tensor = false ;
+        props.comp_num = 2 ;
         props.index = idx ;
         props.staggering = var_staggering_t::STAG_FACEZ;
 
-        detail::_varprops[cname] = props ; 
+        detail::_varprops[cname] = props ;
     }
-       
+
 } ;
+
+static void register_m1_evolved_species(
+    int erad_idx,
+    int nrad_idx,
+    std::array<int,3> const& frad_idxs,
+    std::string const& suffix,
+    bc_t bc)
+{
+    register_evolved_scalar(erad_idx, "Erad" + suffix, bc, "second_order");
+    register_evolved_scalar(nrad_idx, "Nrad" + suffix, bc, "second_order");
+    register_evolved_vector(frad_idxs, "Frad" + suffix, bc, "second_order");
+}
+
+static void register_m1_aux_species(
+    int kappaa_idx,
+    int kappas_idx,
+    int eta_idx,
+    int etan_idx,
+    int kappaan_idx,
+    std::string const& suffix)
+{
+    std::string const name_suffix = suffix.empty() ? suffix : "_" + suffix;
+    register_aux_scalar(kappaa_idx, "kappa_a" + name_suffix);
+    register_aux_scalar(kappas_idx, "kappa_s" + name_suffix);
+    register_aux_scalar(eta_idx, "eta" + name_suffix);
+    register_aux_scalar(etan_idx, "eta_n" + name_suffix);
+    register_aux_scalar(kappaan_idx, "kappa_n" + name_suffix);
+}
 
 
 
 void register_variables() {
-    // purpose of this function is to 
-    // register variable properties 
-    detail::_varnames.resize(N_EVOL_VARS) ; 
-    detail::_auxnames.resize(N_AUX_VARS) ; 
-    detail::_facex_staggered_varnames.resize(N_FC_X) ; 
-    detail::_facey_staggered_varnames.resize(N_FC_Y) ; 
-    detail::_facez_staggered_varnames.resize(N_FC_Z) ; 
-    detail::_edgeyz_staggered_varnames.resize(N_EC_YZ) ; 
-    detail::_edgexz_staggered_varnames.resize(N_EC_XZ) ; 
+    // purpose of this function is to
+    // register variable properties
+    detail::_varnames.resize(N_EVOL_VARS) ;
+    detail::_auxnames.resize(N_AUX_VARS) ;
+    detail::_facex_staggered_varnames.resize(N_FC_X) ;
+    detail::_facey_staggered_varnames.resize(N_FC_Y) ;
+    detail::_facez_staggered_varnames.resize(N_FC_Z) ;
+    detail::_edgeyz_staggered_varnames.resize(N_EC_YZ) ;
+    detail::_edgexz_staggered_varnames.resize(N_EC_XZ) ;
     detail::_edgexy_staggered_varnames.resize(N_EC_XY) ;
-    detail::_corner_staggered_varnames.resize(N_VC) ; 
+    detail::_corner_staggered_varnames.resize(N_VC) ;
 
-    detail::_var_bc_types.resize(N_EVOL_VARS) ; 
-    detail::_facex_vars_bc_types.resize(N_FC_X) ; 
-    detail::_facey_vars_bc_types.resize(N_FC_Y) ; 
-    detail::_facez_vars_bc_types.resize(N_FC_Z) ; 
-    detail::_edgeyz_vars_bc_types.resize(N_EC_YZ) ; 
-    detail::_edgexz_vars_bc_types.resize(N_EC_XZ) ; 
-    detail::_edgexy_vars_bc_types.resize(N_EC_XY) ; 
+    detail::_var_bc_types.resize(N_EVOL_VARS) ;
+    detail::_facex_vars_bc_types.resize(N_FC_X) ;
+    detail::_facey_vars_bc_types.resize(N_FC_Y) ;
+    detail::_facez_vars_bc_types.resize(N_FC_Z) ;
+    detail::_edgeyz_vars_bc_types.resize(N_EC_YZ) ;
+    detail::_edgexz_vars_bc_types.resize(N_EC_XZ) ;
+    detail::_edgexy_vars_bc_types.resize(N_EC_XY) ;
 
-    detail::_var_interp_types.resize(N_EVOL_VARS) ; 
-    detail::_facex_vars_interp_types.resize(N_FC_X) ; 
-    detail::_facey_vars_interp_types.resize(N_FC_Y) ; 
-    detail::_facez_vars_interp_types.resize(N_FC_Z) ; 
-    detail::_edgeyz_vars_interp_types.resize(N_EC_YZ) ; 
-    detail::_edgexz_vars_interp_types.resize(N_EC_XZ) ; 
+    detail::_var_interp_types.resize(N_EVOL_VARS) ;
+    detail::_facex_vars_interp_types.resize(N_FC_X) ;
+    detail::_facey_vars_interp_types.resize(N_FC_Y) ;
+    detail::_facez_vars_interp_types.resize(N_FC_Z) ;
+    detail::_edgeyz_vars_interp_types.resize(N_EC_YZ) ;
+    detail::_edgexz_vars_interp_types.resize(N_EC_XZ) ;
     detail::_edgexy_vars_interp_types.resize(N_EC_XY) ;
-    detail::_corner_vars_interp_types.resize(N_VC) ; 
+    detail::_corner_vars_interp_types.resize(N_VC) ;
 
-    // hydro 
-    
-    auto hydro_bc = detail::get_bc_type(get_param<std::string>("grmhd","bc_kind")) ; 
-    // evolved 
+    // hydro
+
+    auto hydro_bc = detail::get_bc_type(get_param<std::string>("grmhd","bc_kind")) ;
+    // evolved
     register_evolved_scalar(DENS_,"dens",hydro_bc,"second_order") ;
     register_evolved_vector({SX_,SY_,SZ_},"stilde",hydro_bc,"second_order")  ;
     register_evolved_scalar(TAU_,"tau",hydro_bc,"second_order") ;
@@ -423,83 +451,75 @@ void register_variables() {
     #ifdef GRACE_ENABLE_LEPTONIC_4D
     register_evolved_scalar(YMUSTAR_, "ymu_star", hydro_bc, "second_order") ;
     #endif
-    // stag 
-    register_evolved_vector_fc({BSX_,BSY_,BSZ_}, "B_face", hydro_bc, "div_preserving") ;  
-    // aux 
+    // stag
+    register_evolved_vector_fc({BSX_,BSY_,BSZ_}, "B_face", hydro_bc, "div_preserving") ;
+    // aux
     register_aux_scalar(RHO_, "rho") ;
-    register_aux_vector({ZVECX_,ZVECY_,ZVECZ_}, "zvec") ; 
+    register_aux_vector({ZVECX_,ZVECY_,ZVECZ_}, "zvec") ;
     register_aux_vector({BX_,BY_,BZ_}, "Bvec") ;
-    register_aux_scalar(YE_, "ye") ; 
+    register_aux_scalar(YE_, "ye") ;
     #ifdef GRACE_ENABLE_LEPTONIC_4D
     register_aux_scalar(YMU_, "ymu") ;
     #endif
-    register_aux_scalar(TEMP_,"temperature") ; 
-    register_aux_scalar(ENTROPY_,"entropy") ; 
-    register_aux_scalar(EPS_,"eps") ; 
+    register_aux_scalar(TEMP_,"temperature") ;
+    register_aux_scalar(ENTROPY_,"entropy") ;
+    register_aux_scalar(EPS_,"eps") ;
     register_aux_scalar(PRESS_,"press") ;
-    register_aux_scalar(BDIV_, "Bdiv") ; 
-    register_aux_scalar(SMALLB2_,"smallb2") ; 
-    register_aux_scalar(C2P_ERR_,"c2p_err") ; 
+    register_aux_scalar(BDIV_, "Bdiv") ;
+    register_aux_scalar(SMALLB2_,"smallb2") ;
+    register_aux_scalar(C2P_ERR_,"c2p_err") ;
 
     #ifdef GRACE_ENABLE_M1
-    // m1 
-    auto m1_bc = detail::get_bc_type(get_param<std::string>("m1","bc_kind")) ; 
-    // evolved 
-    register_evolved_scalar(ERAD_,"Erad",m1_bc,"second_order") ; 
-    register_evolved_scalar(NRAD_,"Nrad",m1_bc,"second_order") ; 
-    register_evolved_scalar({FRADX_,FRADY_,FRADZ_},"Frad",m1_bc,"second_order") ; 
+    // m1
+    auto m1_bc = detail::get_bc_type(get_param<std::string>("m1","bc_kind")) ;
+    // evolved
+    register_m1_evolved_species(ERAD_, NRAD_, {FRADX_,FRADY_,FRADZ_}, "", m1_bc) ;
     #ifdef M1_NU_THREESPECIES
-    register_evolved_scalar(ERAD1_,"Erad1",m1_bc,"second_order") ; 
-    register_evolved_scalar(NRAD1_,"Nrad1",m1_bc,"second_order") ; 
-    register_evolved_scalar({FRADX1_,FRADY1_,FRADZ1_},"Frad1",m1_bc,"second_order") ; 
-    register_evolved_scalar(ERAD2_,"Erad2",m1_bc,"second_order") ; 
-    register_evolved_scalar(NRAD2_,"Nrad2",m1_bc,"second_order") ; 
-    register_evolved_scalar({FRADX2_,FRADY2_,FRADZ2_},"Frad2",m1_bc,"second_order") ; 
-    #endif 
-    // aux 
-    register_aux_scalar(KAPPAA_,"kappa_a") ; 
-    register_aux_scalar(KAPPAS_,"kappa_s") ; 
-    register_aux_scalar(ETA_,"eta") ; 
-    register_aux_scalar(KAPPAAN_,"kappa_n") ; 
-    register_aux_scalar(ETAN_,"eta_n") ; 
-    #ifdef M1_NU_THREESPECIES
-    register_aux_scalar(KAPPAA1_,"kappa_a_1") ; 
-    register_aux_scalar(KAPPAS1_,"kappa_s_1") ; 
-    register_aux_scalar(ETA1_,"eta_1") ; 
-    register_aux_scalar(KAPPAAN1_,"kappa_n_1") ; 
-    register_aux_scalar(ETAN1_,"eta_n_2") ;
-    register_aux_scalar(KAPPAA2_,"kappa_a_2") ; 
-    register_aux_scalar(KAPPAS2_,"kappa_s_2") ; 
-    register_aux_scalar(ETA2_,"eta_2") ; 
-    register_aux_scalar(KAPPAAN2_,"kappa_n_2") ; 
-    register_aux_scalar(ETAN2_,"eta_n_2") ;
+    register_m1_evolved_species(ERAD1_, NRAD1_, {FRADX1_,FRADY1_,FRADZ1_}, "1", m1_bc) ;
+    register_m1_evolved_species(ERAD2_, NRAD2_, {FRADX2_,FRADY2_,FRADZ2_}, "2", m1_bc) ;
+    #elif defined(M1_NU_FIVESPECIES)
+    register_m1_evolved_species(ERAD1_, NRAD1_, {FRADX1_,FRADY1_,FRADZ1_}, "1", m1_bc) ;
+    register_m1_evolved_species(ERAD2_, NRAD2_, {FRADX2_,FRADY2_,FRADZ2_}, "2", m1_bc) ;
+    register_m1_evolved_species(ERAD3_, NRAD3_, {FRADX3_,FRADY3_,FRADZ3_}, "3", m1_bc) ;
+    register_m1_evolved_species(ERAD4_, NRAD4_, {FRADX4_,FRADY4_,FRADZ4_}, "4", m1_bc) ;
     #endif
-    #endif  
+    // aux
+    register_m1_aux_species(KAPPAA_, KAPPAS_, ETA_, ETAN_, KAPPAAN_, "") ;
+    #ifdef M1_NU_THREESPECIES
+    register_m1_aux_species(KAPPAA1_, KAPPAS1_, ETA1_, ETAN1_, KAPPAAN1_, "1") ;
+    register_m1_aux_species(KAPPAA2_, KAPPAS2_, ETA2_, ETAN2_, KAPPAAN2_, "2") ;
+    #elif defined(M1_NU_FIVESPECIES)
+    register_m1_aux_species(KAPPAA1_, KAPPAS1_, ETA1_, ETAN1_, KAPPAAN1_, "1") ;
+    register_m1_aux_species(KAPPAA2_, KAPPAS2_, ETA2_, ETAN2_, KAPPAAN2_, "2") ;
+    register_m1_aux_species(KAPPAA3_, KAPPAS3_, ETA3_, ETAN3_, KAPPAAN3_, "3") ;
+    register_m1_aux_species(KAPPAA4_, KAPPAS4_, ETA4_, ETAN4_, KAPPAAN4_, "4") ;
+    #endif
+    #endif
 
     #ifdef GRACE_ENABLE_COWLING_METRIC
-    auto metric_bc = detail::get_bc_type("none") ; 
-    register_evolved_tensor({GXX_,GXY_,GXZ_,GYY_,GYZ_,GZZ_}, "gamma", metric_bc, "fourth_order") ; 
-    register_evolved_scalar(ALP_,"alp",metric_bc,"fourth_order") ; 
-    register_evolved_vector({BETAX_,BETAY_,BETAZ_}, "beta", metric_bc, "fourth_order") ; 
-    register_evolved_tensor({KXX_,KXY_,KXZ_,KYY_,KYZ_,KZZ_}, "ext_curv", metric_bc, "fourth_order") ; 
+    auto metric_bc = detail::get_bc_type("none") ;
+    register_evolved_tensor({GXX_,GXY_,GXZ_,GYY_,GYZ_,GZZ_}, "gamma", metric_bc, "fourth_order") ;
+    register_evolved_scalar(ALP_,"alp",metric_bc,"fourth_order") ;
+    register_evolved_vector({BETAX_,BETAY_,BETAZ_}, "beta", metric_bc, "fourth_order") ;
+    register_evolved_tensor({KXX_,KXY_,KXZ_,KYY_,KYZ_,KZZ_}, "ext_curv", metric_bc, "fourth_order") ;
     #elif defined(GRACE_ENABLE_Z4C_METRIC)
-    auto metric_bc = detail::get_bc_type(get_param<std::string>("z4c","bc_kind")) ; 
-    register_evolved_tensor({GTXX_,GTXY_,GTXZ_,GTYY_,GTYZ_,GTZZ_}, "gamma_tilde", metric_bc, "fourth_order") ; 
-    register_evolved_scalar(CHI_,"conf_fact",metric_bc,"fourth_order") ; 
-    register_evolved_scalar(THETA_,"z4c_theta", metric_bc, "fourth_order") ; 
-    register_evolved_vector({GAMMATX_,GAMMATY_,GAMMATZ_}, "z4c_Gamma", metric_bc, "fourth_order") ; 
-    register_evolved_tensor({ATXX_,ATXY_,ATXZ_,ATYY_,ATYZ_,ATZZ_}, "A_tilde", metric_bc, "fourth_order") ; 
-    register_evolved_scalar(KHAT_,"z4c_Khat",metric_bc, "fourth_order") ; 
-    register_evolved_scalar(ALP_,"alp",metric_bc,"fourth_order") ; 
-    register_evolved_vector({BETAX_,BETAY_,BETAZ_}, "beta", metric_bc, "fourth_order") ; 
-    register_evolved_vector({BDRIVERX_,BDRIVERY_,BDRIVERZ_}, "z4c_Bdriver", metric_bc, "fourth_order") ; 
+    auto metric_bc = detail::get_bc_type(get_param<std::string>("z4c","bc_kind")) ;
+    register_evolved_tensor({GTXX_,GTXY_,GTXZ_,GTYY_,GTYZ_,GTZZ_}, "gamma_tilde", metric_bc, "fourth_order") ;
+    register_evolved_scalar(CHI_,"conf_fact",metric_bc,"fourth_order") ;
+    register_evolved_scalar(THETA_,"z4c_theta", metric_bc, "fourth_order") ;
+    register_evolved_vector({GAMMATX_,GAMMATY_,GAMMATZ_}, "z4c_Gamma", metric_bc, "fourth_order") ;
+    register_evolved_tensor({ATXX_,ATXY_,ATXZ_,ATYY_,ATYZ_,ATZZ_}, "A_tilde", metric_bc, "fourth_order") ;
+    register_evolved_scalar(KHAT_,"z4c_Khat",metric_bc, "fourth_order") ;
+    register_evolved_scalar(ALP_,"alp",metric_bc,"fourth_order") ;
+    register_evolved_vector({BETAX_,BETAY_,BETAZ_}, "beta", metric_bc, "fourth_order") ;
+    register_evolved_vector({BDRIVERX_,BDRIVERY_,BDRIVERZ_}, "z4c_Bdriver", metric_bc, "fourth_order") ;
 
-    // aux 
-    register_aux_scalar(PSI4RE_,"Psi4Re") ; 
-    register_aux_scalar(PSI4IM_,"Psi4Im") ; 
-    register_aux_scalar(HAM_,"z4c_H") ; 
-    register_aux_vector({MOMX_,MOMY_,MOMZ_},"z4c_M") ; 
-    #endif 
+    // aux
+    register_aux_scalar(PSI4RE_,"Psi4Re") ;
+    register_aux_scalar(PSI4IM_,"Psi4Im") ;
+    register_aux_scalar(HAM_,"z4c_H") ;
+    register_aux_vector({MOMX_,MOMY_,MOMZ_},"z4c_M") ;
+    #endif
 }
 
 }  } /* namespace grace::variables */

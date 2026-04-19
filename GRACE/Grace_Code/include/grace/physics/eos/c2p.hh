@@ -34,6 +34,9 @@
 #include <grace/utils/metric_utils.hh>
 #include <grace/physics/eos/eos_base.hh>
 #include <grace/physics/eos/hybrid_eos.hh>
+#ifdef GRACE_ENABLE_LEPTONIC_4D
+#include <grace/physics/eos/leptonic_eos_4d.hh>
+#endif
 #include <grace/physics/eos/piecewise_polytropic_eos.hh>
 #include <grace/physics/grmhd_helpers.hh>
 #include <grace/utils/bitset.hh>
@@ -165,7 +168,13 @@ void KOKKOS_INLINE_FUNCTION c2p_handle_eos_signals(
         err.set(C2P_RESET_YE)      ;  
     }
 
-    if (eos_err.test(EOS_YE_TOO_LOW) or eos_err.test(EOS_YE_TOO_HIGH)) {
+    bool reset_ye = eos_err.test(EOS_YE_TOO_LOW) or eos_err.test(EOS_YE_TOO_HIGH);
+#ifdef GRACE_ENABLE_LEPTONIC_4D
+    reset_ye = reset_ye
+            or eos_err.test(leptonic_eos_4d_t::EOS_YMU_TOO_LOW)
+            or eos_err.test(leptonic_eos_4d_t::EOS_YMU_TOO_HIGH);
+#endif
+    if (reset_ye) {
         err.set(C2P_RESET_YE) ; 
     }
 

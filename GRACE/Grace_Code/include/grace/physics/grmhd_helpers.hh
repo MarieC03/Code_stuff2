@@ -373,6 +373,7 @@ struct grmhd_id_t {
   double temp;
   double entropy;
   double ye;
+  double ymu{0.0};
   double gxx,gxy,gxz,gyy,gyz,gzz; 
   double kxx,kxy,kxz,kyy,kyz,kzz;
   double alp;  
