@@ -1,0 +1,161 @@
+eos:
+  type: schema 
+  description: >
+    EOS parameters 
+  
+  eos_type:
+    type: keyword
+    default: "hybrid"
+    allowed: ["hybrid", "tabulated", "leptonic_4d"]
+    description: >
+      Kind of EOS 
+
+
+  hybrid_eos:
+    type: schema 
+    description: > 
+      Parameters for the hybrid eos 
+    
+    cold_eos_type: 
+      type: keyword 
+      default: "piecewise_polytrope"
+      allowed: ["piecewise_polytrope", "tabulated"]
+      description: >
+        For hybrid_eos: kind of cold eos 
+
+    gamma_th: 
+      type: double 
+      default: 1.8 
+      range: "(*,*)"
+      description: >
+        Thermal Gamma for hybrid eos 
+
+  piecewise_polytrope:
+    type: schema 
+    description: >
+      Piecewise polytrope parameters 
+
+    n_pieces:
+      type: unsigned int 
+      default: 7 
+      range: "[1,*)"
+      description: > 
+        Number of pieces 
+
+    gammas: 
+      type: list 
+      item_type: double 
+      range: "(0,*)"
+      default: [1.58425 , 1.28733     , 0.62223     , 1.35692     , 3.005       , 2.988       , 2.851]
+      description: >
+        Gammas of piecewise polytrope 
+
+    rhos: 
+      type: list 
+      item_type: double 
+      range: "(0,*)"
+      default: [ 3.951156e-11, 6.125960e-07, 4.254672e-06, 2.367449e-04, 8.114721e-04, 1.619100e-03]
+      description: >
+        rhos of piecewise polytrope   
+
+    kappa_0: 
+      type: double 
+      default: 1.685819e+02
+      range: "[0,*)"
+      description: >
+        Kappa of first piece 
+
+  tabulated_eos:
+    type: schema
+    description: >
+      Parameters for nuclear tabulated eos 
+    table_filename: 
+      type: string
+      default: "blah.h5"
+      description: >
+        File name of tabulated eos 
+    table_format:
+      type: keyword 
+      allowed: ["compose", "stellarcollapse"]
+      default: "compose"
+      description: >
+        Format of 3D table 
+    cold_table_filename:
+      type: string 
+      default: "blah.grace"
+      description: >
+        Cold slice table file name
+
+  leptonic_4d:
+    type: schema
+    description: >
+      Parameters for the 4D leptonic tabulated EOS (rho, T, Y_e, Y_mu).
+
+    table_filename:
+      type: string
+      default: "leptonic4d.h5"
+      description: >
+        HDF5 file containing the 4-axis (rho, T, Y_e, Y_mu) EOS tables.
+
+    cold_table_filename:
+      type: string
+      default: "leptonic4d_cold.grace"
+      description: >
+        ASCII cold-slice table for the 4D leptonic EOS.
+
+    table_format:
+      type: keyword
+      allowed: ["leptonic_4d_native"]
+      default: "leptonic_4d_native"
+      description: >
+        Table format selector. Currently only the native 4D format is supported.
+
+    do_energy_shift:
+      type: bool
+      default: true
+      description: >
+        Apply the energy_shift read from the table.
+
+    use_muonic_eos:
+      type: bool
+      default: true
+      description: >
+        Read and use the muon lepton sub-tables.
+
+    atmosphere_beta_eq:
+      type: bool
+      default: true
+      description: >
+        Initialise atmosphere Y_e and Y_mu in beta-equilibrium at the floor state.
+
+    ymu_floor:
+      type: double
+      default: 0.0
+      range: "[0,*)"
+      description: >
+        Minimum allowed muon fraction Y_mu.
+
+    ymu_maximum:
+      type: double
+      default: 0.1
+      range: "[0,0.5]"
+      description: >
+        Maximum allowed muon fraction Y_mu.
+
+  eps_maximum:
+    type: double 
+    default: 1.e5 
+    range: "(0,*)"
+    description: >
+      Maximum allowed specific internal energy 
+
+  entropy_minimum:
+    type: double 
+    default: 1e-13 
+    range: "(0,*)"
+    description: >
+      Minimum allowed entropy per particle 
+
+  
+
+  

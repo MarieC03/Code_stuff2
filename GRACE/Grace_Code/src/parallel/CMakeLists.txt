@@ -1,0 +1,1 @@
+register_grace_object(grace_parallel mpi_wrappers.cc)

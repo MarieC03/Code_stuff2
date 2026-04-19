@@ -1,0 +1,23 @@
+option(GRACE_ENABLE_BURGERS  "Enable Burgers equation module" OFF) 
+option(GRACE_ENABLE_SCALAR_ADV  "Enable scalar advection equation module" OFF) 
+option(GRACE_ENABLE_GRMHD   "Enable GRMHD equation module"  ON)
+option(GRACE_ENABLE_M1 "Enable M1 rad transport" OFF)
+option(GRACE_FREEZE_HYDRO "Freeze hydrodynamics evolution" OFF)
+
+if( GRACE_ENABLE_SCALAR_ADV )
+    message(STATUS "Scalar advection module enabled.")
+    set(GRACE_ENABLE_GRMHD OFF)
+endif()
+if( GRACE_ENABLE_BURGERS )
+    message(STATUS "Burgers module enabled.")
+    set(GRACE_ENABLE_GRMHD OFF)
+endif()
+if( GRACE_ENABLE_GRMHD )
+    message(STATUS "GRMHD module enabled.")
+    set(GRACE_ENABLE_BURGERS OFF)
+endif()
+
+if( GRACE_ENABLE_FUKA )
+    message(STATUS "FUKA module enabled.")
+endif()
+

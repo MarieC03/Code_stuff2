@@ -1,0 +1,89 @@
+GRACE/
+├── include/grace/
+│   ├── physics/
+│   │   ├── eos/
+│   │   │   ├── leptonic_eos_4d.hh              NEW
+│   │   │   ├── read_leptonic_4d_table.hh       NEW
+│   │   │   ├── kastaun_c2p_lep4d.hh            NEW
+│   │   │   ├── c2p_lep4d.hh                    NEW
+│   │   │   └── eos_storage_lep4d.hh            NEW
+│   │   ├── id/
+│   │   │   └── grmhd_lep4d_id.hh               NEW
+│   │   └── grmhd_lep4d_flux_patch.hh           NEW
+│   └── data_structures/
+│       └── variable_indices_lep4d_patch.hh     NEW
+│
+├── src/
+│   ├── physics/
+│   │   ├── eos/
+│   │   │   ├── CMakeLists.txt                  PATCH: add grace_lep4d_eos
+│   │   │   └── read_leptonic_4d_table.cpp      NEW
+│   │   ├── CMakeLists.txt                      PATCH: add grace_grmhd_lep4d
+│   │   ├── grmhd.cpp                           PATCH: #include + YMUSTAR_ + flux + instantiation
+│   │   └── grmhd_lep4d_id.cpp                 NEW
+│   └── data_structures/
+│       ├── CMakeLists.txt                      PATCH: add grace_lep4d_var_registration
+│       ├── variable_indices.cpp                PATCH: call register_variables_lep4d()
+│       └── variable_registration_lep4d.cpp     NEW
+│
+├── parameters/
+│   ├── eos.yaml                                PATCH: add leptonic_4d sub-schema + eos_type keyword
+│   └── eos_leptonic_4d.yaml                   NEW (content to merge)
+│
+├── test/
+│   └── test_leptonic_4d_eos.cpp               NEW
+│
+└── cmake/ (or top-level CMakeLists.txt)
+    └── CMakeLists_lep4d_patch.cmake           NEW
+
+
+The three files that also require small inline patches to existing source are:
+
+include/grace/data_structures/variable_indices.hh — insert YMUSTAR_ after ENTROPYSTAR_ and YMU_ after YE_, both guarded by #ifdef GRACE_ENABLE_LEPTONIC_4D.
+include/grace/physics/eos/eos_storage.hh — add _leptonic_4d member, get_leptonic_4d() accessor, and the get_eos<leptonic_eos_4d_t>() branch, all guarded.
+src/physics/grmhd.cpp — add #include <grace/physics/id/grmhd_lep4d_id.hh> and #include <grace/physics/grmhd_lep4d_flux_patch.hh>, the YMUSTAR_ flux line, the post-ID set_ymustar_from_beta_eq call, and the template instantiation for leptonic_eos_4d_t.
+
+
+-------------- DETAILS ------------------------------
+File Overview
+leptonic_eos_4d.hh
+The central EOS class. Derives from eos_base_t<leptonic_eos_4d_t> via CRTP, exactly like tabulated_eos_t. Key design decisions:
+
+Adds a fourth axis Y_mu to the existing 3D interpolator by introducing tabeos_linterp_4d_t — a [irho, iT, iye, iymu, ivar] five-index Kokkos View with trilinear → quadrilinear interpolation.
+Three separate 4D tables: baryon (same TEOS_VIDX enum as tabulated_eos_t), ELE (electron lepton partial contributions), MUON (muon lepton partial contributions) — mirrors Margherita's EBARYON, EELE, EMUON enums.
+All _impl methods in the base CRTP interface are forwarded to *_ye_ymu variants. The 3D base API uses _c2p_ymu_atm as a passthrough default so existing code calling the standard interface keeps working.
+KOKKOS_INLINE_FUNCTION/GRACE_HOST_DEVICE throughout for GPU correctness.
+
+read_leptonic_4d_table.hh / read_leptonic_4d_table.cpp
+Table reader. Reads the 4D HDF5 table (using the same READ_*_HDF5 macro pattern as read_eos_table.cpp), applies unit conversions (log10→loge + CGS→geometric), and returns a fully-constructed leptonic_eos_4d_t. Parameters are driven by grace::get_param from the YAML schema.
+kastaun_c2p_lep4d.hh
+Conservative-to-primitive inversion. Provides kastaun_c2p_lep4d_t<eos_t> and entropy_fix_c2p_lep4d_t<eos_t> operating on the extended lep4d_cons_array_t / lep4d_prims_array_t arrays. The Kastaun residual f(mu) is structurally identical to the existing froot_t but calls eos.press__eps_rho_ye_ymu(...) and eos.press_h_csnd2_temp_entropy__eps_rho_ye_ymu(...).
+c2p_lep4d.hh
+Dispatcher. Mirrors c2p.hh/c2p.cpp — conservs_to_prims_lep4d handles the full c2p pipeline: clamp Y_e/Y_mu, conservative limiting, primary Kastaun inversion, optional entropy backup, reset to atmosphere, then prims_to_conservs_lep4d.
+variable_indices_lep4d_patch.hh
+Guards showing exactly where to insert YMUSTAR_ into evol_hrsc_var_cc_idx and YMU_ into aux_var_idx, plus extended FILL_CONS_ARRAY_LEP4D / FILL_PRIMS_ARRAY_LEP4D / SCATTER_PRIMS_ARRAY_LEP4D macros.
+variable_registration_lep4d.cpp
+Registers ymu_star (evolved) and ymu (auxiliary) via the standard register_evolved_scalar / register_aux_scalar calls.
+eos_storage_lep4d.hh
+Extends eos_storage_t to hold a leptonic_eos_4d_t member and adds it to the get_eos<eos_t>() template dispatch.
+grmhd_lep4d_flux_patch.hh
+Adds the Y_mu advection flux (f[YMUSL] = solver(ymu*D_flux, ...)) alongside the existing Y_e flux in the Riemann solver kernel, and provides the SCATTER_LEP4D_FLUX_TO_STATE macro for writing results back to the state view.
+eos_leptonic_4d.yaml
+Parameter schema that extends the eos namespace with a new leptonic_4d block (table filenames, format, beta-eq flags, Y_mu floor).
+grmhd_lep4d_id.hh / grmhd_lep4d_id.cpp
+Initial-data and beta-equilibrium layer. These form the host–device bridge for setting starting conditions:
+
+find_beta_eq_ye_ymu() (host-only): a nested double-Brent solver. The outer iteration sweeps Y_mu ∈ [ymumin, ymumax] enforcing mu_mu = mu_e; the inner iteration sweeps Y_e enforcing mu_n − mu_p − mu_e = 0. This mirrors Margherita's press_eps_ye__beta_eq__rho_temp pattern but using the GRACE utils::brent idiom and the new 4D EOS mue_mumu_mup_mun__temp_rho_ye_ymu interface. When no sign change is found (no muon threshold reached), it gracefully falls back to Y_mu = 0.
+set_ymustar_from_beta_eq(): a Kokkos parallel_for kernel that runs over every grid cell after the standard ID has set DENS_, YE_, TEMP_, RHO_. For each cell it evaluates mu_mu and mu_e at (rho, T, Y_e, Y_mu_min) from the 4D table, and sets Y_mu to a half-way estimate if muons are energetically favoured. This is a GPU-safe approach since full double-Brent on device would be expensive; the exact beta-eq is done host-side for the atmosphere and then used as a seed.
+set_grmhd_initial_data_lep4d(): the public entry point. Calls set_grmhd_initial_data<leptonic_eos_4d_t>() (the standard GRACE pipeline with the 4D EOS as template parameter), then runs the beta-eq atmosphere step and the YMUSTAR_ population kernel.
+
+test_leptonic_4d_eos.cpp
+Unit test suite (Catch2, matching test_eos.cpp / test_pwpoly_eos.cpp style):
+
+Test 1 — EOS API self-consistency on a 8×5×3×3 = 360-point (rho, T, Y_e, Y_mu) grid via a Kokkos parallel_for. Checks seven groups of API call pairs: temperature recovery from eps, cross-checks of all press/h/cs2/entropy accessors, and that eps always lies within eps_range.
+Test 2 — C2P round-trip on a flat Minkowski metric: primitive → prims_to_conservs_lep4d → conservs_to_prims_lep4d → primitives, checking rho, press, eps, Y_e, Y_mu, z-vector to 1e-8.
+Test 3 — Beta-equilibrium residual: after calling find_beta_eq_ye_ymu, verifies |mu_n − mu_p − mu_e| < 1e-8 and (when muons are present) |mu_mu − mu_e| < 1e-8.
+Test 4 — Flux proportionality: unit-tests the algebraic identity that when Y_mu is constant across an interface, f[YMUSL] = Y_mu × f[DENSL] exactly.
+
+CMakeLists_lep4d_patch.cmake
+A self-documenting CMake snippet with exact instructions for where to add option(GRACE_ENABLE_LEPTONIC_4D ...), target_sources(...), add_executable(test_leptonic_4d_eos ...), and a reference example YAML configuration block. It also enumerates every #ifdef GRACE_ENABLE_LEPTONIC_4D site in the existing codebase that needs to be patched (variable enums, eos_storage_t constructor, flux kernel, c2p template instantiation).

@@ -1,0 +1,58 @@
+m1: {
+  # initial data for radiation 
+  id_type: "straight_beam",
+
+  # atmosphere and excision settings 
+  atmosphere: {
+    E_fl: 1e-14,
+    E_scaling: 0,
+    eps_fl: 1,
+    eps_scaling: 0,
+    eps_min: 1,
+    eps_max: 10
+  },
+  excision: {
+    E_excision: 1e-14,
+    eps_excision: 1
+  },
+
+  kind: "neutrino_analytic",   #"neutrino_weakhub",
+  use_analytic: true, #false,
+  use_weakhub: false, #true,
+  weakhub_table: "./table.h5", #/path/to/table.h5
+
+  # analytic EAS neutrino rates
+  beta_decay: true,
+  plasmon_decay: true,
+  bremsstrahlung: true,
+  pair_annihilation: true,
+
+  # optical depth (tau) policy
+  tau_policy: "local_spherical",
+  tau_outer_radius_code: 200.0,
+
+  # optional rates policies
+  betaeq_policy: "off",
+  temperature_correction: true,
+
+  # emission absorption scattering 
+  # computation policy 
+  eas: {
+    kind: "test"
+  },
+
+  # specific parameters for 
+  # scattering tests 
+  scattering_test: {
+    k_s: 1e02, 
+    t_0: 1,
+    is_static_background: true
+  },
+
+  # specific parameters for 
+  # emitting sphere tests 
+  emitting_sphere_test: {
+    temperature: 1,
+    cross_section: 10
+  }
+}

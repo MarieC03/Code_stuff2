@@ -1,0 +1,90 @@
+# parameters/eos_leptonic_4d.yaml
+# ============================================================
+#  GRACE parameter schema extension for the 4D leptonic EOS.
+#
+#  Add the "leptonic_4d" sub-schema below under the top-level
+#  "eos" schema in parameters/eos.yaml:
+#
+#    eos_type:
+#      allowed: ["hybrid", "tabulated", "leptonic_4d"]   # add leptonic_4d
+#
+#    leptonic_4d:
+#      <contents of this file>
+#
+# ============================================================
+
+leptonic_4d:
+  type: schema
+  description: >
+    Parameters for the 4D leptonic tabulated EOS (rho, T, Y_e, Y_mu).
+
+  table_filename:
+    type: string
+    default: "leptonic4d.h5"
+    description: >
+      HDF5 file containing the 4-axis (rho, T, Y_e, Y_mu) EOS tables.
+      Expected datasets (under root):
+        pointsrho, pointstemp, pointsye, pointsymu  [int]
+        logrho, logtemp, ye, ymu                    [double array, log10 for rho/T]
+        energy_shift                                 [double, CGS]
+        mass_factor                                  [double, optional, g]
+        logpress, logenergy, entropy, cs2            [double, NTAB×N]
+        mu_e, mu_p, mu_n                             [double, NTAB×N]
+        Xa, Xh, Xn, Xp, Abar, Zbar                  [double, NTAB×N]
+        ele/mu_ele, ele/yle_minus, ..., ele/s_e_plus [double, NTAB×N]
+        muon/mu_mu, muon/ymu_minus, ..., muon/s_mu_plus [double, NTAB×N]
+
+  cold_table_filename:
+    type: string
+    default: "leptonic4d_cold.grace"
+    description: >
+      ASCII cold-slice table for the 4D leptonic EOS.
+      Format (header line + nrows line + data):
+        logrho  temp  ye_cold  ymu_cold  press  eps  cs2  entropy
+      (same style as standard GRACE cold tables, with two extra columns
+       for Y_e and Y_mu on the cold slice.)
+
+  table_format:
+    type: keyword
+    allowed: ["leptonic_4d_native"]
+    default: "leptonic_4d_native"
+    description: >
+      Table format selector.  Currently only the native 4D format is supported.
+
+  do_energy_shift:
+    type: bool
+    default: true
+    description: >
+      Apply the energy_shift read from the table to shift eps to a
+      positive range (consistent with stellarcollapse convention).
+
+  use_muonic_eos:
+    type: bool
+    default: true
+    description: >
+      Read and use the muon lepton sub-tables (muon/mu_mu, etc.).
+      If false, the muon lepton table is not read and Y_mu is treated
+      as a passive tracer without thermodynamic back-reaction.
+
+  atmosphere_beta_eq:
+    type: bool
+    default: true
+    description: >
+      Initialise atmosphere Y_e, Y_mu in beta-equilibrium at the
+      floor density and temperature.  If false, uses table minima.
+
+  ymu_floor:
+    type: double
+    default: 0.0
+    range: "[0,*)"
+    description: >
+      Minimum allowed muon fraction Y_mu.  Values below this are
+      clamped during the C2P.  Should match the lowest Y_mu axis
+      value in the table (usually 0).
+
+  ymu_maximum:
+    type: double
+    default: 0.1
+    range: "[0,0.5]"
+    description: >
+      Maximum allowed muon fraction Y_mu for atmosphere / c2p clipping.

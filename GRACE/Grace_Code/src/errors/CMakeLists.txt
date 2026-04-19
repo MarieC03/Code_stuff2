@@ -1,0 +1,2 @@
+
+register_grace_object(grace_error_handlers abort.cc error.cc)

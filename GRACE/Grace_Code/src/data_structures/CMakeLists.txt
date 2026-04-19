@@ -1,0 +1,4 @@
+register_grace_object(grace_variable_list variables.cpp)
+register_grace_object(grace_variable_registration variable_indices.cpp)
+register_grace_object(grace_variable_utils variable_utils.cpp)
+#register_grace_object_conditional(grace_lep4d_var_registration GRACE_ENABLE_LEPTONIC_4D variable_registration_lep4d.cpp)
