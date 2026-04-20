@@ -1068,14 +1068,16 @@ GRACE_HOST_DEVICE inline nu_rates_out compute_species(
 --- WEAKHUB
 m1:
   eas:
-    kind: "weakhub"
+    kind: "neutrino_weakhub"
+    species_mode: "five"
     use_weakhub: true
     use_analytic: false
     weakhub_table: "/path/to/weakhub_table.h5"
 --- ANALYTIC
 m1:
   eas:
-    kind: "analytic"
+    kind: "neutrino_analytic"
+    species_mode: "three"
     use_weakhub: false
     use_analytic: true
 

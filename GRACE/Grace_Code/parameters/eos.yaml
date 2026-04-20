@@ -8,7 +8,7 @@ eos:
     default: "hybrid"
     allowed: ["hybrid", "tabulated", "leptonic_4d"]
     description: >
-      Kind of EOS 
+      EOS selector for the fluid and lepton thermodynamics.
 
 
   hybrid_eos:
@@ -68,34 +68,38 @@ eos:
   tabulated_eos:
     type: schema
     description: >
-      Parameters for nuclear tabulated eos 
+      Parameters for the 3D rho-T-Ye tabulated EOS used for baryonic matter
+      plus electron/lepton thermodynamics without an explicit Y_mu axis.
     table_filename: 
       type: string
       default: "blah.h5"
       description: >
-        File name of tabulated eos 
+        HDF5 file name of the 3D rho-T-Ye EOS table.
     table_format:
       type: keyword 
       allowed: ["compose", "stellarcollapse"]
       default: "compose"
       description: >
-        Format of 3D table 
+        Format of the 3D rho-T-Ye table.
     cold_table_filename:
       type: string 
       default: "blah.grace"
       description: >
-        Cold slice table file name
+        Cold-slice table file name used by the GRACE cold-EOS helpers.
 
   leptonic_4d:
     type: schema
     description: >
-      Parameters for the 4D leptonic tabulated EOS (rho, T, Y_e, Y_mu).
+      Parameters for the GRACE-native 4D rho-T-Y_e-Y_mu leptonic EOS built
+      from the FIL/Margherita baryon, electron, and muon sectors.
 
     table_filename:
       type: string
       default: "leptonic4d.h5"
       description: >
-        HDF5 file containing the 4-axis (rho, T, Y_e, Y_mu) EOS tables.
+        HDF5 file containing the merged GRACE-native 4-axis
+        (rho, T, Y_e, Y_mu) EOS tables. This is not the original split FIL
+        baryon-table plus leptonic-table pair.
 
     cold_table_filename:
       type: string
@@ -108,7 +112,8 @@ eos:
       allowed: ["leptonic_4d_native"]
       default: "leptonic_4d_native"
       description: >
-        Table format selector. Currently only the native 4D format is supported.
+        Table-format selector. Currently only the native GRACE 4D format is
+        supported.
 
     do_energy_shift:
       type: bool
@@ -120,7 +125,8 @@ eos:
       type: bool
       default: true
       description: >
-        Read and use the muon lepton sub-tables.
+        Read and use the muon lepton sub-tables. This must be true for the
+        5-species muonic Weakhub transport path.
 
     atmosphere_beta_eq:
       type: bool

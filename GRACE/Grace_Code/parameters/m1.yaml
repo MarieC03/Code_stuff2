@@ -12,7 +12,7 @@ m1:
 
   id_type:
     type: keyword
-    allowed: ["straight_beam", "scattering", "shadow", "emitting_sphere", "zero", "curved_beam", "coupling_test"]
+    allowed: ["straight_beam", "scattering", "moving_scattering", "shadow", "emitting_sphere", "zero", "curved_beam", "coupling_test"]
     default: "zero"
     description: >
       Initialization prescription for radiation fields
@@ -42,6 +42,13 @@ m1:
       range: "(0,*)"
       description: >
         Flooring value for average energy
+
+    eps_scaling:
+      type: double
+      range: "[0,*)"
+      default: 0
+      description: >
+        Radial dependence of the average-energy floor
 
     eps_min:
       type: double
@@ -80,14 +87,104 @@ m1:
   eas:
     type: schema
     description: >
-      Parameters controlling emission absorption and scattering rates
+      Parameters controlling emission, absorption, and scattering rates.
+      The canonical GRACE interface lives under m1.eas.*.
 
     kind:
       type: keyword
       allowed: ["test", "photon_rates", "neutrino_analytic", "neutrino_weakhub"]
       default: "test"
       description: >
-        What prescription to use to set eas
+        Rate prescription. Use neutrino_analytic for the FIL-style 3-spec
+        analytic rates, and neutrino_weakhub for the tabulated Weakhub rates.
+
+    species_mode:
+      type: keyword
+      allowed: ["build_default", "one", "three", "five"]
+      default: "build_default"
+      description: >
+        Requested active neutrino-species layout. Use "three" for
+        (nu_e, anti-nu_e, nu_x) and "five" for
+        (nu_e, anti-nu_e, nu_mu, anti-nu_mu, nu_x). The run-time choice must
+        match the executable build selected through GRACE_M1_NUM_SPECIES.
+
+    use_analytic:
+      type: bool
+      default: false
+      description: >
+        Legacy compatibility switch for selecting the analytic neutrino rates.
+        Usually leave this false and select the rates treatment via
+        m1.eas.kind.
+
+    use_weakhub:
+      type: bool
+      default: false
+      description: >
+        Legacy compatibility switch for selecting the Weakhub neutrino rates.
+        Keep this consistent with m1.eas.kind.
+
+    weakhub_table:
+      type: string
+      default: "weakhub_grey.h5"
+      description: >
+        HDF5 path to the Weakhub grey-opacity table. Three-species runs require
+        the 3-spec table, while five-species muonic runs require the 6-spec
+        Y_mu-dependent table from FIL/Margherita.
+
+    beta_decay:
+      type: bool
+      default: true
+      description: >
+        Include charged-current beta-process contributions.
+
+    plasmon_decay:
+      type: bool
+      default: true
+      description: >
+        Include plasmon-decay contributions where supported by the selected
+        rates treatment.
+
+    bremsstrahlung:
+      type: bool
+      default: true
+      description: >
+        Include nucleon-nucleon bremsstrahlung contributions where supported by
+        the selected rates treatment.
+
+    pair_annihilation:
+      type: bool
+      default: true
+      description: >
+        Include pair-annihilation contributions where supported by the selected
+        rates treatment.
+
+    tau_policy:
+      type: keyword
+      allowed: ["none", "analytic_density", "local_spherical"]
+      default: "local_spherical"
+      description: >
+        Optical-depth closure used by the analytic and Weakhub add-on rates.
+
+    tau_outer_radius_code:
+      type: double
+      default: 200.0
+      range: "(0,*)"
+      description: >
+        Outer radius, in code units, used by the local_spherical tau policy.
+
+    betaeq_policy:
+      type: keyword
+      allowed: ["off", "chemical"]
+      default: "off"
+      description: >
+        Optional beta-equilibrium override for the composition passed to the
+        rates.
+
+    temperature_correction:
+      type: bool
+      default: true
+      description: >
+        Apply the FIL-style temperature correction in the neutrino rates.
 
   scattering_test:
     type: schema

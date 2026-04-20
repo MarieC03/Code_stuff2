@@ -16,29 +16,25 @@ m1: {
     eps_excision: 1
   },
 
-  kind: "neutrino_analytic",   #"neutrino_weakhub",
-  use_analytic: true, #false,
-  use_weakhub: false, #true,
-  weakhub_table: "./table.h5", #/path/to/table.h5
-
-  # analytic EAS neutrino rates
-  beta_decay: true,
-  plasmon_decay: true,
-  bremsstrahlung: true,
-  pair_annihilation: true,
-
-  # optical depth (tau) policy
-  tau_policy: "local_spherical",
-  tau_outer_radius_code: 200.0,
-
-  # optional rates policies
-  betaeq_policy: "off",
-  temperature_correction: true,
-
   # emission absorption scattering 
   # computation policy 
   eas: {
-    kind: "test"
+    kind: "test",
+    species_mode: "build_default",
+    use_analytic: false,
+    use_weakhub: false,
+    weakhub_table: "./weakhub_grey.h5",
+
+    beta_decay: true,
+    plasmon_decay: true,
+    bremsstrahlung: true,
+    pair_annihilation: true,
+
+    tau_policy: "local_spherical",
+    tau_outer_radius_code: 200.0,
+
+    betaeq_policy: "off",
+    temperature_correction: true
   },
 
   # specific parameters for 

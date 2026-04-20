@@ -43,6 +43,7 @@
 #include <grace/physics/eas_neutrino_rates_analytic.hh>
 
 #include <grace/config/config_parser.hh>
+#include <grace/errors/assert.hh>
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
@@ -268,11 +269,11 @@ struct neutrinos_eas_op {
       : eos(eos::get().get_eos<eos_t>()),
         aux(_aux),
         mass_scale(grace::get_param<double>("coordinate_system", "mass_scale")),
-        beta_decay(grace::get_param<bool>("m1", "beta_decay")),
-        plasmon_decay(grace::get_param<bool>("m1", "plasmon_decay")),
-        bremsstrahlung(grace::get_param<bool>("m1", "bremsstrahlung")),
-        pair_annihilation(grace::get_param<bool>("m1", "pair_annihilation")),
-        apply_temp_correction(grace::get_param<bool>("m1", "temperature_correction")),
+        beta_decay(grace::get_param<bool>("m1", "eas", "beta_decay")),
+        plasmon_decay(grace::get_param<bool>("m1", "eas", "plasmon_decay")),
+        bremsstrahlung(grace::get_param<bool>("m1", "eas", "bremsstrahlung")),
+        pair_annihilation(grace::get_param<bool>("m1", "eas", "pair_annihilation")),
+        apply_temp_correction(grace::get_param<bool>("m1", "eas", "temperature_correction")),
         use_weakhub(parse_use_weakhub_host()),
         betaeq_mode(parse_betaeq_mode_host()),
         tau_kind(parse_tau_kind_host()),
@@ -280,17 +281,18 @@ struct neutrinos_eas_op {
         // tau_kind(TAU_NONE),
         weakhub(grace::weakhub::get_device_handle())
   {
+    validate_configuration_host();
     // Host-only parsing: strings are not device-friendly.
     // TODO: parser optimize
     //betaeq_mode = parse_betaeq_mode_host();
     //tau_kind = parse_tau_kind_host();
-    spherical_tau.r_outer_code = grace::get_param<double>("m1", "tau_outer_radius_code");
+    spherical_tau.r_outer_code = grace::get_param<double>("m1", "eas", "tau_outer_radius_code");
     spherical_tau.seed_with_analytic = true;
   }
 
   int parse_betaeq_mode_host() const {
     try {
-      const auto mode = grace::get_param<std::string>("m1", "betaeq_policy");
+      const auto mode = grace::get_param<std::string>("m1", "eas", "betaeq_policy");
       if (mode == "chemical") return BETAEQ_CHEMICAL;
     } catch(...) {}
     return BETAEQ_OFF;
@@ -298,7 +300,8 @@ struct neutrinos_eas_op {
 
   tau_kind_t parse_tau_kind_host() const {
     try {
-      const auto mode = grace::get_param<std::string>("m1", "tau_policy");
+      const auto mode = grace::get_param<std::string>("m1", "eas", "tau_policy");
+      if (mode == "none") return TAU_NONE;
       if (mode == "analytic_density") return TAU_ANALYTIC_DENSITY;
       if (mode == "local_spherical") return TAU_LOCAL_SPHERICAL;
     } catch(...) {}
@@ -307,6 +310,66 @@ struct neutrinos_eas_op {
 
   bool parse_use_weakhub_host() const {
     return grace::weakhub::weakhub_enabled_from_params();
+  }
+
+  void validate_configuration_host() const {
+    const auto eas_kind = grace::get_param<std::string>("m1", "eas", "kind");
+    if (eas_kind != "neutrino_analytic" && eas_kind != "neutrino_weakhub") {
+      return;
+    }
+
+    const auto species_mode = grace::get_param<std::string>("m1", "eas", "species_mode");
+    const bool use_analytic = grace::get_param<bool>("m1", "eas", "use_analytic");
+    const bool use_weakhub_cfg = grace::get_param<bool>("m1", "eas", "use_weakhub");
+    const auto eos_type = grace::get_param<std::string>("eos", "eos_type");
+
+    ASSERT(eos_type == "tabulated" || eos_type == "leptonic_4d",
+           "Microphysical neutrino M1 rates require a Ye-dependent tabulated EOS "
+           "or the leptonic_4d EOS.");
+
+    if (eas_kind == "neutrino_analytic") {
+      ASSERT(!use_weakhub_cfg,
+             "m1.eas.kind is neutrino_analytic, but m1.eas.use_weakhub is true. "
+             "Choose one rates treatment.");
+    } else if (eas_kind == "neutrino_weakhub") {
+      ASSERT(!use_analytic,
+             "m1.eas.kind is neutrino_weakhub, but m1.eas.use_analytic is true. "
+             "Choose one rates treatment.");
+    }
+
+    if (eos_type == "leptonic_4d") {
+      const bool use_muonic_eos =
+          grace::get_param<bool>("eos", "leptonic_4d", "use_muonic_eos");
+#ifdef M1_NU_FIVESPECIES
+      ASSERT(use_muonic_eos,
+             "The 5-species M1 build requires eos.leptonic_4d.use_muonic_eos = true "
+             "so muonic matter couples consistently to nu_mu and anti-nu_mu.");
+#else
+      ASSERT(!use_muonic_eos,
+             "Muonic EOS contributions require the 5-species M1 build. "
+             "Disable eos.leptonic_4d.use_muonic_eos or rebuild GRACE with five "
+             "neutrino species.");
+#endif
+    }
+
+#ifdef M1_NU_FIVESPECIES
+    ASSERT(species_mode == "build_default" || species_mode == "five",
+           "This GRACE executable was built with five M1 neutrino species. "
+           "Set m1.eas.species_mode to \"five\" or \"build_default\".");
+    ASSERT(eas_kind == "neutrino_weakhub",
+           "The 5-species muonic transport path is only supported with Weakhub "
+           "rates, matching the FIL implementation.");
+    ASSERT(eos_type == "leptonic_4d",
+           "The 5-species muonic transport path requires eos.eos_type = \"leptonic_4d\".");
+#elif defined(M1_NU_THREESPECIES)
+    ASSERT(species_mode == "build_default" || species_mode == "three",
+           "This GRACE executable was built with three M1 neutrino species. "
+           "Set m1.eas.species_mode to \"three\" or \"build_default\".");
+#else
+    ASSERT(species_mode == "build_default" || species_mode == "one",
+           "This GRACE executable was built with one M1 neutrino species. "
+           "Set m1.eas.species_mode to \"one\" or \"build_default\".");
+#endif
   }
 
   // --- beta equilibrium: mu_e + mu_p - mu_n - Qnp = 0 (chemical equilibrium) ---

@@ -42,6 +42,57 @@ namespace {
   device_handle g_handle;
   bool g_initialized = false;
 
+  void validate_weakhub_runtime_configuration() {
+    const auto species_mode = grace::get_param<std::string>("m1", "eas", "species_mode");
+    const auto eos_type = grace::get_param<std::string>("eos", "eos_type");
+
+    if (eos_type != "tabulated" && eos_type != "leptonic_4d") {
+      throw std::runtime_error(
+          "Weakhub neutrino rates require a Ye-dependent tabulated EOS or the leptonic_4d EOS.");
+    }
+
+    if (eos_type == "leptonic_4d") {
+      const bool use_muonic_eos =
+          grace::get_param<bool>("eos", "leptonic_4d", "use_muonic_eos");
+#ifdef M1_NU_FIVESPECIES
+      if (!use_muonic_eos) {
+        throw std::runtime_error(
+            "The 5-species Weakhub path requires eos.leptonic_4d.use_muonic_eos = true.");
+      }
+#else
+      if (use_muonic_eos) {
+        throw std::runtime_error(
+            "Muonic EOS contributions require the 5-species M1 build. "
+            "Disable eos.leptonic_4d.use_muonic_eos or use a 5-species build.");
+      }
+#endif
+    }
+
+#ifdef M1_NU_THREESPECIES
+    if (species_mode != "build_default" && species_mode != "three") {
+      throw std::runtime_error(
+          "This GRACE executable was built with three M1 neutrino species. "
+          "Set m1.eas.species_mode to \"three\" or \"build_default\".");
+    }
+#elif defined(M1_NU_FIVESPECIES)
+    if (species_mode != "build_default" && species_mode != "five") {
+      throw std::runtime_error(
+          "This GRACE executable was built with five M1 neutrino species. "
+          "Set m1.eas.species_mode to \"five\" or \"build_default\".");
+    }
+    if (eos_type != "leptonic_4d") {
+      throw std::runtime_error(
+          "The 5-species Weakhub path requires eos.eos_type = \"leptonic_4d\".");
+    }
+#else
+    if (species_mode != "build_default" && species_mode != "one") {
+      throw std::runtime_error(
+          "This GRACE executable was built with one M1 neutrino species. "
+          "Set m1.eas.species_mode to \"one\" or \"build_default\".");
+    }
+#endif
+  }
+
 #ifdef GRACE_USE_HDF5
   template <typename T>
   void read_dataset(hid_t file, const char* name, hid_t type, T* data) {
@@ -73,6 +124,7 @@ void initialize_weakhub_from_params() {
 #ifndef GRACE_USE_HDF5
   throw std::runtime_error("Weakhub requested but GRACE_USE_HDF5 is not enabled.");
 #else
+  validate_weakhub_runtime_configuration();
   const auto path = grace::get_param<std::string>("m1","eas","weakhub_table");
   hid_t file = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
   if (file < 0) throw std::runtime_error("Failed to open Weakhub HDF5 table: " + path);

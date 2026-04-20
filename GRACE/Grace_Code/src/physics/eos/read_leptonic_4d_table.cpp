@@ -99,11 +99,11 @@ grace::leptonic_eos_4d_t read_leptonic_4d_table()
     auto const tab_format = grace::get_param<std::string>("eos", "leptonic_4d", "table_format");
 
     bool const do_energy_shift =
-        grace::get_param<bool>("eos", "leptonic_4d", "do_energy_shift", true);
+        grace::get_param<bool>("eos", "leptonic_4d", "do_energy_shift");
     bool const use_muonic_eos =
-        grace::get_param<bool>("eos", "leptonic_4d", "use_muonic_eos", true);
+        grace::get_param<bool>("eos", "leptonic_4d", "use_muonic_eos");
     bool const atm_beta_eq =
-        grace::get_param<bool>("eos", "leptonic_4d", "atmosphere_beta_eq", true);
+        grace::get_param<bool>("eos", "leptonic_4d", "atmosphere_beta_eq");
 
     GRACE_INFO("Reading 4D leptonic EOS table: {}", fname);
     GRACE_INFO("Format: {}", tab_format);
@@ -388,13 +388,13 @@ grace::leptonic_eos_4d_t read_leptonic_4d_table()
     double const ymumax = ymus[nymu - 1];
     double const ymumin = ymus[0];
 
-    auto usr_epsmax = grace::get_param<double>("eos", "eps_maximum", 1.e5);
+    auto usr_epsmax = grace::get_param<double>("eos", "eps_maximum");
     if (usr_epsmax < epsmax_val) {
         epsmax_val = usr_epsmax;
     }
 
-    double temp_floor = grace::get_param<double>("grmhd", "atmosphere", "temp_fl", tempmin);
-    double rho_floor = grace::get_param<double>("grmhd", "atmosphere", "rho_fl", rhomin);
+    double temp_floor = grace::get_param<double>("grmhd", "atmosphere", "temp_fl");
+    double rho_floor = grace::get_param<double>("grmhd", "atmosphere", "rho_fl");
     if (temp_floor < tempmin) {
         GRACE_WARN("Requested leptonic atmosphere temperature is below table bound {}.", tempmin);
         temp_floor = tempmin * (1.0 + 1e-5);
