@@ -234,6 +234,7 @@ use mod_eos_hybrid
 use mod_eos_polytrope
 use mod_eos
 use mod_variables
+use mod_weakhub_parameters, only: Weakhub_grey_method
 include 'amrvacdef.f'
 
 logical :: fileopen
@@ -317,8 +318,9 @@ namelist /outflowlist/  healpix_det_open, healpix_det_num, healpix_det_radii, he
 
 namelist /m1list/  fileWeakhub, m1_closure_type, m1_actual_speeds, m1_radice_speeds, m1_parabolic, &
                     m1_frad_A2_A, m1_frad_A2_A3, m1_erad_LLF, m1_frad_LLF, M1_FLUID_BACKREACT, &
-                    m1_use_neutrinos, m1_use_muons, m1_use_photons, m1_2_eas_updates, TESTqtC, m1_E_atmo, &
-                    m1_N_atmo, m1_tset, m1_tset_backreact, m1_rho_floor
+                    m1_use_neutrinos, m1_use_muons, m1_use_photons, m1_use_5_species, m1_2_eas_updates, &
+                    TESTqtC, m1_E_atmo, &
+                    m1_N_atmo, m1_tset, m1_tset_backreact, m1_rho_floor, Weakhub_grey_method
 
 ! m1_i_nue, m1_i_nuebar, m1_i_nux, m1_i_mu, m1_i_mubar, m1_i_photon
 !----------------------------------------------------------------------------
@@ -577,6 +579,7 @@ M1_FLUID_BACKREACT = .false.
 m1_use_neutrinos = .true.
 m1_use_muons = .false.
 m1_use_photons = .false.
+m1_use_5_species = .false.
 TESTqtC = 1.0d+10
 m1_2_eas_updates = .true.
 m1_E_atmo = 1.0d-15
@@ -590,6 +593,7 @@ m1_N_atmo = 1.0d-15
 m1_tset = 1.0d0 !0.4d0
 m1_tset_backreact = 2.0d0
 m1_rho_floor = 1.0d-12
+Weakhub_grey_method = 1
 
 ! problem setup defaults
 dxlone^D=zero;
@@ -1185,6 +1189,31 @@ read(unitpar, m1list)
 
 close(unitpar)
 
+{#IFDEF M1_RATES
+if (m1_use_5_species) then
+   m1_use_neutrinos = .true.
+   m1_use_muons = .true.
+endif
+
+if (m1_use_muons) m1_use_5_species = .true.
+
+if (m1_use_muons .and. .not. m1_use_neutrinos) then
+   call mpistop('5-species M1 needs m1_use_neutrinos = .true. when m1_use_muons = .true.')
+endif
+
+if (m1_use_muons .and. .not. eos_has_ymu()) then
+   call mpistop('m1_use_muons = .true. requires eos_type_input = leptonic')
+endif
+
+if (m1_use_muons .and. .not. lep_use_muons) then
+   call mpistop('m1_use_muons = .true. requires lep_use_muons = .true. in eoslist')
+endif
+
+if (Weakhub_grey_method .ne. 1) then
+   call mpistop('Active BHAC M1 Weakhub path currently supports only Weakhub_grey_method = 1')
+endif
+}
+
 if (mype==0) then
    print*,'Reading from inifile: ', trim(inifile)
    print*,'snapshotini         : ', snapshotini
@@ -1194,6 +1223,8 @@ if (mype==0) then
    print*,'Filenameini         : ', trim(filenameini)
    print*,'Filenameout         : ', trim(filenameout)
    print*,'Converting?         : ', convert
+   print*,'m1_use_5_species    : ', m1_use_5_species
+   print*,'Weakhub_grey_method : ', Weakhub_grey_method
    print*,'                                                                '
 endif
 

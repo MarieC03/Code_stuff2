@@ -1,0 +1,243 @@
+
+&filelist
+       ! variables you have set in mod_variables --> follow the order that you set
+        !primnames       = 'd dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 U_br alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met U_br1 U_br2 U_br3 R_br U5_br h_00'
+        primnames       = 'd dye s1 s2 s3 tau b1 b2 b3 nrad1 erad1 frad11 frad12 frad13 nrad2 erad2 frad21 frad22 frad23 nrad3 erad3 frad31 frad32 frad33 T_eps ye rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met'
+        autoconvert     = .true.
+        saveprim        = .false.
+        convert_type    = 'vtuBCCmpi'
+        slice_type      = 'vtuCC'
+        !filenameini     = 'Q3ij_coord_vi_fixed_Ubri_sigma'
+        filenameini     = './output_new/test' !'/lustre/hpe/ws11/ws11.1/ws/xfpcassi-FIL_dir/BHAC_sim/cart3DM1/output/test' !'case47_cfcdt1e0_cfl03_lfacmax10'
+        filenameout     = './output_new/test' !'/lustre/hpe/ws11/ws11.1/ws/xfpcassi-FIL_dir/BHAC_sim/cart3DM1/output/test' !'output/test' !'case47_cfcdt1e0_cfl03_lfacmax10'
+        filenamelog     = './output_new/test' !'/lustre/hpe/ws11/ws11.1/ws/xfpcassi-FIL_dir/BHAC_sim/cart3DM1/output/test' !'output/test' !'case47_cfcdt1e0_cfl03_lfacmax10'
+        !snapshotini     = 0 !154                  ! Restart from this snapshot
+        !snapshotnext    = 1 !155                 !The next snapshot of restart
+        !slicenext       = 1 !155 
+        typefilelog     = 'special'        ! use special to provide all info in log file
+        nwauxio         = 42 !0 !42 !5 !2                ! how many io aux vars you have set in specialvar_output in amrvacusr.t
+        typeparIO       = 0
+       !nocartesian   = .true.
+&end
+
+
+&savelist
+        itsave(1,1)        = 0             ! save the first step in log
+        itsave(1,2)       = 0
+        itsave(1,3)        = 0             ! save the first step in csv slice
+        ditsave(1)         = 1             ! log file output frequency per how many hydro steps
+        dtsave(3)          = 1000
+        ditsave(3) = 1 !10 !128
+        dtsave(2) = 20 !1000
+        dtsave(7) = 10 
+
+
+       ! set property of output slices
+        nslices = 3                        ! number of slice
+        slicedir(1) = 1                    ! first slice and want to fix which direction, e.g. 1=r, 2=theta, 3=phi in spherical coord
+        slicecoord(1) = 0.d0              ! position at the chosen direction
+        slicedir(2) = 2
+        slicecoord(2) = 0.d0
+        slicedir(3) = 3
+        slicecoord(3) = 0.d0
+        time_between_print = 1.d0          ! how many seconds you want to see screen output to monitor the sim, print: it t dt time_in_reality
+&end
+
+
+&stoplist
+        !tmax            = 0.1d0                ! 202.96 = 1ms
+        tmax            = 20000.d0                ! 202.96 = 1ms
+        !itmax            = 10               
+        dtmin           = 1.d-4 
+&end
+
+
+&methodlist
+        !wnames       = 'd dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 U_br alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met U_br1 U_br2 U_br3 R_br U5_br h_00'
+        wnames       = 'd dye s1 s2 s3 tau b1 b2 b3 nrad1 erad1 frad11 frad12 frad13 nrad2 erad2 frad21 frad22 frad23 nrad3 erad3 frad31 frad32 frad33 T_eps ye rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met'
+        typeadvance     = 'ImEx222' !'threestep'
+        typefull1       = 18*'hll'           !KEN
+        !typefull1       = 18*'fd_hll'
+        use_4th_order_fd= T
+        use_del_zanna   = F
+        face_to_center_order = 2
+        typelimiter1    = 18*'wenoZ5' !18*'wenoZP'        ! 13*'ppm', 13*'mp5'
+        typeemf         = 'average'!'uct2'!'average' !this was here:'uct2'    
+        tlow            = 1.0d-8
+        typeinversion   = 'KastaunC2P'
+        Kc2p_tolerance  = 1.0d-15
+        typegrad        = 'upwind'
+        typecoord       = 'covariant'
+        typeaxial       = 'cartesian'
+        clean_init_divB = 'none'!'vecpot'!'none'
+        lfac_max        = 10.0d0          ! max lorentz factor value you want to be enforced in Kc2p
+        evolve_hydro    = T            
+        small_values_method = 'replace'   ! small value treatment before p2c or after reconstruction
+        PP_limiter      = T !T !KEN               ! positivity preserving limiter
+        PPM_extrema     = F ! it needs one more extra cell in FV and FD
+        PPM_flatcd      = F
+        PPM_flatsh      = F
+        PPM_flatten     = F
+        usr_W_limit_scheme = F
+        old_bhac_safety = F
+        fixp_after_reconstruct = F
+&end
+
+
+&boundlist
+        dixB             = 4
+                          !'d dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 U_br alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2
+!Xvec3 psi_met'
+                          !'d dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2
+                          !Xvec3 psi_met'
+        typeB             = 
+                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont' 
+                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
+                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
+                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
+                           !28*'periodic'
+                           !28*'periodic'
+                           !28*'periodic'
+                           !28*'periodic'
+                           !28*'periodic' 
+                           !28*'periodic'
+                           ! Treating U_br ^i to be individual scalar
+                           !4*'symm', 'asymm', 'symm', 2*'asymm', 6*'symm', 'asymm', 3*'symm',
+                           ! 'asymm', 2*'symm','asymm','symm', 7*'symm'
+                           ! Treating U_br ^i to be a normal vector 
+                           4*'symm', 'asymm', 'symm', 2*'asymm', 1*'symm', 4*'symm', 'asymm',4*'symm', 'asymm',4*'symm', 'asymm', 5*'symm', 'asymm', 3*'symm', 'asymm', 2*'symm','asymm','symm'
+                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
+&end
+
+
+&amrlist
+        ! User please remember:          dx^D_maxlv = domain^D/ (nxlone^D * 2^(mxnest - 1) )
+        mxnest            = 7 !8!1              ! Maximum AMR lv
+        nxlone1           = 64!32!64            ! # of cells in AMR lv1 in first direction
+        nxlone2           = 64!32 !64            ! # of cells in AMR lv1 in second direction
+        nxlone3           = 32!16 !32             ! # of cells in AMR lv1 in third direction
+        xprobmin1         = -640.0d0 !-409.6d0!-11.5d0 !-102.4d0        ! Range of the domain in first direction
+        xprobmax1         = 640.0d0 !409.6d0!11.5d0 !102.4d0
+        xprobmin2         = -640.0d0 !-409.6d0!-11.5d0 !-102.4d0        ! Range of the domain in second direction
+        xprobmax2         = 640.0d0 !409.6d0!11.5d0 !102.4d0
+        xprobmin3         = 0               ! Range of the domain in third direction
+        xprobmax3         = 640.0d0 !409.6d0!11.5d0 !102.4d0
+        prolongprimitive  = F
+        coarsenprimitive  = F
+        restrictprimitive = F
+        block_nx1         = 8                ! cell number in a block without ghostcells in first coordinate
+        block_nx2         = 8  
+        block_nx3         = 8  
+        itfixgrid         = 0              ! =0 means FMR
+&end
+
+&paramlist
+       slowsteps        = 10
+       courantpar       = 0.15d0
+       !courantpar       = 0.2d0
+       typecourant      = 'maxsum'
+       !typecourant      = 'minimum'
+&end
+
+
+&cfclist
+       cfc_evolve                = T              ! turn dynamical space under cfc approx.?
+       cfc_smallest_dt           = 2.03001708d-4  ! allowed smallest time step for metric solver (for dit_update only)
+       !cfc_dit_update            = 1              ! number of timestep to update metric once
+       cfc_dt_update             = 1.0d0
+       !cfc_dt_update             = 5.0d-1
+       cfc_tol1                  = 1.0d-8         ! Tolerance for solving alp for the constraint eqt at initialization
+       cfc_tol2                  = 1.0d-8         ! Tolerance for solving psi for the constraint eqt at initialization
+       cfc_tol3                  = 1.0d-8         ! Tolerance for solving beta for the constraint eqt at initialization
+       cfc_tol_evolve1           = 1.0d-6         ! Tolerance for solving alp for the constraint eqt at EVOLUTION
+       cfc_tol_evolve2           = 1.0d-6         ! Tolerance for solving psi for the constraint eqt at EVOLUTION
+       cfc_tol_evolve3           = 1.0d-6         ! Tolerance for solving beta for the constraint eqt at EVOLUTION
+       initialize_metric         = T              ! Want to initialize the metric? For C2B data, you have to turn on
+       cfc_coordinate            = 'cartesian'    ! Choose spherical or cartesian or cylinderical for the system
+       metric_vars_interpolation = T
+       cfc_t_end_of_stage1       = 300000.d0       ! Ending time of stage 1  (202.9 ~ 1ms)
+       cfc_dit_update_stage2     = 1             ! number of timestep to update metric metric at stage 2
+       !cfc_dt_update_stage2      = 1.0d-1  ! ~ dit=4
+       cfc_beta_robin_bc         = F
+       cfc_n_cycle               = 15, 15
+       fix_prim_init             = F
+       use_check_psi             = F  ! if this turn off during premerger --> problems of divB and hydro
+&end
+
+
+&eoslist     
+       ! Eos_type_input could be 1. tabulated, 2. idealgas, 3. polytrope 
+       !eos_type_input   = 'idealgas'      
+       eos_type_input   = 'tabulated'      
+       table_type_input = 'compose'        
+      ! eos_table_name = '/mnt/raarchive/hng/EOS/tntyst_nnew.h5'
+      ! eos_table_name = '/zhome/academic/HLRS/xfp/xfpcassi/EOS/EOS_TABLES/tntyst_nnew.h5'
+      ! eos_table_name = '/mnt/rafast/mcassing/EoS/tntyst_nnew.h5'
+      ! eos_table_name = '/mnt/rafast/mcassing/EoS/HSDD2_new.h5'
+      ! eos_table_name = '/mnt/rafast/mcassing/EoS/dd2_compose_electrons_ye0-5.h5'
+       eos_table_name = '/mnt/rafast/mcassing/EoS/sfho_compose_electrons_ye0-5.h5'
+       !atmo_type        = 'polytrope'      
+       atmo_type        = 'beta_eqm'      
+       atmo_gamma       = 2.     
+       atmo_adiab       = 1.0d2  
+       small_rho        = 1.0d0 
+       small_rho_thr    =  1.0101010101010101d-14 !1.0d-14  
+       !small_rho_thr    = 1.0101010101010101d-14   ! 1.0d-14 / 0.99d0
+       small_rho_fac    = 0.99d0 !0.99d0
+       small_temp       = 0.1d0 !0.01d0
+       massn_cgs        = 1.6584904382336898d-24 ! unit: gram 
+&end
+
+&outflowlist
+       healpix_det_open = .true.
+       healpix_det_num = 9  !6
+       healpix_var_num = 6
+       !healpix_vname_str = "Poynting Mass Ub_mass Spec_j Velo_r psi_met"
+       !!healpix_vname_str = "Poynting Ub_mass Velo_r"
+        !healpix_vname_str = "M1_nue M1_nuebar M1_nux"
+        healpix_vname_str = "Poynting Ub_mass Velo_r M1_nue M1_nuebar M1_nux"
+        healpix_det_radii(1) = 30 !50
+        healpix_det_radii(2) = 50 !75
+        healpix_det_radii(3) = 75 !100
+        healpix_det_radii(4) = 100 !100 !150
+        healpix_det_radii(5) = 150 !200
+        healpix_det_radii(6) = 200 !200
+        healpix_det_radii(7) = 250
+        healpix_det_radii(8) = 300
+        healpix_det_radii(9) = 350
+        !healpix_det_radii(10) = 200
+        healpix_nside(1) = 64
+        healpix_nside(2) = 64
+        healpix_nside(3) = 64
+        healpix_nside(4) = 64
+        healpix_nside(5) = 64
+        healpix_nside(6) = 64
+        healpix_nside(7) = 64
+        healpix_nside(8) = 64
+        healpix_nside(9) = 64
+        !healpix_nside(10) = 128
+       healpix_det_zsymm = .true.
+&end
+
+&m1list
+   !fileWeakhub = '/mnt/rafast/mcassing/EoS/weakhub/conven_TNTYST_new_PPkernels_ESkappa_20250404_Weakhub_grey.h5'
+
+   !!TESTqtC = 0.000001
+   m1_2_eas_updates = F
+   m1_actual_speeds = T
+   m1_fluid_backreact = T
+   m1_frad_A2_A = T
+   m1_tset = 0.0d0
+   m1_tset_backreact = 0.0d0
+   
+   m1_E_atmo = 1.0d-14
+   m1_N_atmo = 1.0d-14
+   m1_rho_floor = 1.0d-14 !1.0d-10
+
+    fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/SFHocompose_grey_npe_noPP_advopac_20240906_Weakhub_grey.h5"
+   !fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/conven_TNTYST_new_PPkernels_ESkappa_20250404_Weakhub_grey.h5"
+  ! fileWeakhub = "/mnt/rafast/mcassing/Weakhub/dURCA_convenforbetaproc_DD2_grey_npe_20240723_Weakhub_grey.h5"
+  ! fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/DD2compose_grey_npe_noPP_advopac_20240906_Weakhub_grey.h5"
+   ! fileWeakhub = '/zhome/academic/HLRS/xfp/xfpcassi/EOS/EOS_TABLES/weakhub/dURCA_convenforbetaproc_DD2_grey_npe_20240723_Weakhub_grey.h5'
+   !fileWeakhub = 'zhome/academic/HLRS/xfp/xfpcassi/EOS/EOS_TABLES/weakhub/conven_TNTYST_new_PPkernels_ESkappa_20250404_Weakhub_grey.h5'
+&end

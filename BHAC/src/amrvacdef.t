@@ -218,7 +218,8 @@ COMMON, character*131 :: m1_closure_type
 COMMON, DOUBLE PRECISION :: m1_E_atmo, m1_N_atmo, TESTqtC, m1_tset, m1_tset_backreact, m1_rho_floor
 COMMON, LOGICAL    :: m1_radice_speeds,m1_actual_speeds,m1_parabolic,&
                       m1_frad_A2_A3,m1_frad_A2_A,m1_frad_LLF,m1_erad_LLF, &
-                      M1_FLUID_BACKREACT,m1_use_neutrinos,m1_use_muons,m1_use_photons,m1_2_eas_updates
+                      M1_FLUID_BACKREACT,m1_use_neutrinos,m1_use_muons,m1_use_photons,m1_2_eas_updates, &
+                      m1_use_5_species
 !!m1_i_nue, m1_i_nuebar, m1_i_nux, m1_i_mu, m1_i_mubar, m1_i_photon
 
 !Convert parameters
