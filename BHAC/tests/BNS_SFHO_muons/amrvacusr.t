@@ -810,19 +810,9 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
             if (mirror_zplane .and. x(ix^D, 3)<0.d0) then
                 w(ix^D, u3_) = -w(ix^D, u3_)
                 w(ix^D, beta_metric3_) = -w(ix^D, beta_metric3_)
-                !if(init_m1_vars)then
-                !    {^KSP&
-                !    if(Nspecies .ge. 1) then
-                !    w(ix^D, frad^KSP3_) = - w(ix^D, frad^KSP3_)
-                !    end if 
-                !    if(Nspecies .ge. 2) then
-                !    w(ix^D, frad^KSP3_) = - w(ix^D, frad^KSP3_)
-                !    end if 
-                !    if(Nspecies .ge. 3) then
-                !    w(ix^D, frad^KSP3_) = - w(ix^D, frad^KSP3_)
-                !    end if 
-                !    \}
-                !end if
+                if(init_m1_vars) then
+                    {^KSP& w(ix^D, frad^KSP3_) = -w(ix^D, frad^KSP3_) \}
+                end if
             endif
         {end do^D& \}
 
@@ -851,17 +841,21 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
               {^C& stateM1%F_low(^C) = w(ix^D, frad^KSP^C_ ) \} 
               {^C& stateM1%vel(^C)   = w(ix^D, u0_ + ^C ) \}         
 	          call m1_update_closure_ixD(stateM1,metricM1,ix^D,.true.,get_vel_impl=.true.)
+              w(ix^D, erad^KSP_) = max(stateM1%E, m1_E_atmo)
+              {^C& w(ix^D, frad^KSP^C_) = stateM1%F_low(^C) \}
               Gamma_M1(ix^D) = stateM1%Gamma
            {end do^D& \}
 
  
 
            ! These are the gauge independent quantities and not the conserved 
+              w(ixO^S, nrad^KSP_ ) = max(w(ixO^S, nrad^KSP_ ), m1_N_atmo)
               w(ixO^S, erad^KSP_ ) = w(ixO^S, erad^KSP_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, nrad^KSP_ ) = w(ixO^S, nrad^KSP_ ) * Gamma_M1(ixO^S) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, frad^KSP1_ ) = w(ixO^S, frad^KSP1_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, frad^KSP2_ ) = w(ixO^S, frad^KSP2_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, frad^KSP3_ ) = w(ixO^S, frad^KSP3_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
+              call m1_enforce_realizability(metricM1,w,ixI^L,ixO^L,^KSP)
 
            ! where ((w(ixO^S, erad^KSP_) < m1_E_atmo * (1.0d0 +1.0d-2)) .or. (w(ixO^S, nrad^KSP_) < m1_E_atmo * (1.0d0 +1.0d-2)))
            !     w(ixO^S, erad^KSP_ ) = m1_E_atmo
@@ -2020,7 +2014,7 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
    logical :: calc_eqRates = .true.
    integer :: igrid1 = 1
    double precision, dimension(ixI^S) :: J_out, Gamma_out
-   double precision, dimension(ixI^S) :: Gamma1, Gamma2, Gamma3
+   double precision, dimension(ixI^S) :: Gamma1, Gamma2, Gamma3, Gamma4, Gamma5
    integer :: ispec
    
    double precision, dimension(ixI^S) :: eos_ent, eos_prs
@@ -2221,6 +2215,48 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
    if (nwmax-nw .gt. 39) &
       w(ixI^S,nw+40) = w(ixI^S, erad3_) / metricM1%sqrtg(ixI^S)  ! erad3_prim
 
+   {do ix^D=ixOmin^D, ixOmax^D \}
+           	  stateM1%E = w(ix^D, erad4_ ) / metricM1%sqrtg(ix^D)
+              {^C& stateM1%F_low(^C) = w(ix^D, frad4^C_ ) / metricM1%sqrtg(ix^D) \}
+              {^C& stateM1%vel(^C)   = w(ix^D, u0_ + ^C ) \}
+	          call m1_update_closure_ixD(stateM1,metricM1,ix^D,.true.,get_vel_impl=.true.)
+              Gamma4(ix^D) = stateM1%Gamma
+              J_out(ix^D) = stateM1%J
+    {end do^D& \}
+
+   if (nwmax-nw .gt. 40) &
+      w(ixI^S,nw+41) = J_out(ixI^S)  ! J4
+
+   if (nwmax-nw .gt. 41) &
+      w(ixI^S,nw+42) = Gamma4(ixI^S)  ! Gamma4
+
+   {do ix^D=ixOmin^D, ixOmax^D \}
+           	  stateM1%E = w(ix^D, erad5_ ) / metricM1%sqrtg(ix^D)
+              {^C& stateM1%F_low(^C) = w(ix^D, frad5^C_ ) / metricM1%sqrtg(ix^D) \}
+              {^C& stateM1%vel(^C)   = w(ix^D, u0_ + ^C ) \}
+	          call m1_update_closure_ixD(stateM1,metricM1,ix^D,.true.,get_vel_impl=.true.)
+              Gamma5(ix^D) = stateM1%Gamma
+              J_out(ix^D) = stateM1%J
+    {end do^D& \}
+
+   if (nwmax-nw .gt. 42) &
+      w(ixI^S,nw+43) = J_out(ixI^S)  ! J5
+
+   if (nwmax-nw .gt. 43) &
+      w(ixI^S,nw+44) = Gamma5(ixI^S)  ! Gamma5
+
+   if (nwmax-nw .gt. 44) &
+      w(ixI^S,nw+45) = w(ixI^S, nrad4_) / (metricM1%sqrtg(ixI^S) * Gamma4(ixI^S))  ! nrad4_prim
+
+   if (nwmax-nw .gt. 45) &
+      w(ixI^S,nw+46) = w(ixI^S, erad4_) / metricM1%sqrtg(ixI^S)  ! erad4_prim
+
+   if (nwmax-nw .gt. 46) &
+      w(ixI^S,nw+47) = w(ixI^S, nrad5_) / (metricM1%sqrtg(ixI^S) * Gamma5(ixI^S))  ! nrad5_prim
+
+   if (nwmax-nw .gt. 47) &
+      w(ixI^S,nw+48) = w(ixI^S, erad5_) / metricM1%sqrtg(ixI^S)  ! erad5_prim
+
     {do ix^D=ixOmin^D, ixOmax^D \}
       eos_rho(ix^D) = w(ix^D, rho_)
       eos_temp(ix^D) = w(ix^D, T_eps_)
@@ -2239,11 +2275,11 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
       endif
     {end do^D& \}
 
-   if (nwmax-nw .gt. 40) &
-      w(ixI^S,nw+41) = eos_ent(ixI^S)  ! entropy
+   if (nwmax-nw .gt. 48) &
+      w(ixI^S,nw+49) = eos_ent(ixI^S)  ! entropy
 
-   if (nwmax-nw .gt. 41) &
-      w(ixI^S,nw+42) = eos_prs(ixI^S)  ! pressure
+   if (nwmax-nw .gt. 49) &
+      w(ixI^S,nw+50) = eos_prs(ixI^S)  ! pressure
 
  end associate
  end subroutine specialvar_output
@@ -2335,6 +2371,22 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
    write(wnames,"(a,a)") trim(wnames),' nrad3_prim'
    write(primnames,"(a,a)") trim(primnames),' erad3_prim'
    write(wnames,"(a,a)") trim(wnames),' erad3_prim'
+   write(primnames,"(a,a)") trim(primnames),' J4'
+   write(wnames,"(a,a)") trim(wnames),' J4'
+   write(primnames,"(a,a)") trim(primnames),' Gamma4'
+   write(wnames,"(a,a)") trim(wnames),' Gamma4'
+   write(primnames,"(a,a)") trim(primnames),' J5'
+   write(wnames,"(a,a)") trim(wnames),' J5'
+   write(primnames,"(a,a)") trim(primnames),' Gamma5'
+   write(wnames,"(a,a)") trim(wnames),' Gamma5'
+   write(primnames,"(a,a)") trim(primnames),' nrad4_prim'
+   write(wnames,"(a,a)") trim(wnames),' nrad4_prim'
+   write(primnames,"(a,a)") trim(primnames),' erad4_prim'
+   write(wnames,"(a,a)") trim(wnames),' erad4_prim'
+   write(primnames,"(a,a)") trim(primnames),' nrad5_prim'
+   write(wnames,"(a,a)") trim(wnames),' nrad5_prim'
+   write(primnames,"(a,a)") trim(primnames),' erad5_prim'
+   write(wnames,"(a,a)") trim(wnames),' erad5_prim'
    write(primnames,"(a,a)") trim(primnames),' ent'
    write(wnames,"(a,a)") trim(wnames),' ent'
    write(primnames,"(a,a)") trim(primnames),' prs'

@@ -1,0 +1,1154 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black
+}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\dir}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\file}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\routine}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\var}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\bhac}{\textsc{BHAC+}}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true
+}
+
+\title{\bhac{} Developer and Physics Manual}
+\author{Workspace documentation for the active compiled source tree}
+\date{Snapshot documented from the local source tree on 2026-04-20}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Purpose, Scope, and Reading Strategy}
+
+This document is a code-and-physics manual for the active \bhac{} source tree in this workspace.  It is intended for three use cases:
+\begin{enumerate}[leftmargin=1.8em]
+\item understanding the global control flow from startup to time stepping, output, and shutdown;
+\item locating the source file and routine that implements a given physical model or numerical step;
+\item extending the code consistently, in particular for realistic EOS work, neutrino transport, initial-data import, and diagnostics.
+\end{enumerate}
+
+\subsection{What is meant by \bhac{} here}
+
+In this workspace, \bhac{} means the BHAC code path selected by the top-level makefiles:
+\begin{itemize}[leftmargin=1.8em]
+\item core driver files in \dir{BHAC/src};
+\item GRMHD physics in \dir{BHAC/src/imhd};
+\item geometry and metric modules in \dir{BHAC/src/geometry} and \dir{BHAC/src/geometry/cfc};
+\item EOS modules in \dir{BHAC/src/eos_modules};
+\item M1 radiation transport in \dir{BHAC/src/m1};
+\item I/O, import, conversion, and detector infrastructure in \dir{BHAC/src/amrvacio} and \dir{BHAC/src/ID_reader}.
+\end{itemize}
+
+The repository also contains historical, backup, debug, and draft files such as dated variants, \file{*_old.t}, \file{*_debug.t}, and draft routines like \file{calculate_m1_eas_ixD_new*.t}.  Those files are useful as development history, but they are \emph{not} the reference implementation documented here unless explicitly stated.  This manual describes the active compiled path that the main makefiles select.
+
+\subsection{Conventions used throughout this manual}
+
+\begin{itemize}[leftmargin=1.8em]
+\item \textbf{State naming.} ``Primitive'' means variables such as $\rho$, $T$, $Y_e$, velocity, and magnetic field. ``Conservative'' means the evolved finite-volume or finite-difference state.
+\item \textbf{Indices.} The code uses the AMRVAC/BHAC preprocessor language.  Common shorthand includes \var{ixI^L} for an input index box, \var{ixO^L} for an output box, \var{ix^D} for a single point loop index, \var{^C} for component loops, and \var{^KSP} for radiation-species loops.
+\item \textbf{Units.} The EOS and M1 modules mostly work in BHAC geometric/code units internally, with explicit conversions to or from cgs when reading tables or evaluating table-based microphysics.
+\item \textbf{Compile-time switches.} Much of the logic is enabled conditionally by macros such as \var{DY_SP}, \var{TABEOS}, \var{M1}, \var{M1_RATES}, \var{M1_TAU_OPT}, and \var{GW_BR}.  The runtime namelists only work correctly if the corresponding compile-time path is present.
+\end{itemize}
+
+\section{Build System, Runtime Usage, and Configuration}
+
+\subsection{Work directory model and setup script}
+
+BHAC is designed to be built from a \emph{work directory}.  The script \file{BHAC/setup.pl} copies or edits a local \file{makefile}, \file{definitions.h}, and \file{amrvacsettings.t} in that work directory and points them back to the source tree through the environment variable \var{BHAC_DIR}.
+
+The usual setup flow is:
+\begin{lstlisting}[language=bash]
+export BHAC_DIR=/path/to/BHAC
+mkdir run
+cd run
+cp /path/to/amrvacusr.t .
+cp /path/to/amrvacusrpar.t .
+perl $BHAC_DIR/setup.pl -d=33 -g=64,64,32 -p=imhd -coord=cartesian -arch=<arch>
+make bhac
+./bhac -i import.par
+\end{lstlisting}
+
+The most important \file{setup.pl} switches are:
+\begin{itemize}[leftmargin=1.8em]
+\item \var{-d=33}: set \var{ndim=3}, \var{ndir=3};
+\item \var{-g=n1,n2,n3}: change \var{ixGhi^D} in \file{amrvacsettings.t};
+\item \var{-p=imhd}: select the physics module;
+\item \var{-eos=<name>}: set the EOS selector in the work-directory makefile;
+\item \var{-coord=<name>}: choose the coordinate family;
+\item \var{-arch=<arch>}: choose compiler and library settings.
+\end{itemize}
+
+\subsection{Compile-time controls}
+
+The main makefiles split the code into a core layer plus directory-specific layers:
+\begin{itemize}[leftmargin=1.8em]
+\item \file{BHAC/src/makefile}: core driver and AMR framework;
+\item \file{BHAC/src/imhd/makefile}: GRMHD physics;
+\item \file{BHAC/src/eos_modules/makefile}: EOS support;
+\item \file{BHAC/src/m1/makefile}: M1 radiation transport;
+\item \file{BHAC/src/geometry/makefile} and \file{BHAC/src/geometry/cfc/makefile}: coordinate and CFC/GW infrastructure;
+\item \file{BHAC/src/amrvacio/makefile}: I/O and conversion;
+\item \file{BHAC/src/modules/makefile}: generic utilities.
+\end{itemize}
+
+The most important compile-time switches and their meaning are listed in Table~\ref{tab:compile-switches}.
+
+\begin{longtable}{L{0.18\textwidth}L{0.28\textwidth}L{0.46\textwidth}}
+\caption{Main compile-time switches relevant for the active \bhac{} workflow.}
+\label{tab:compile-switches}\\
+\toprule
+Switch & Location / effect & Meaning in the code path \\
+\midrule
+\endfirsthead
+\toprule
+Switch & Location / effect & Meaning in the code path \\
+\midrule
+\endhead
+\code{DY_SP} & geometry / GRMHD & Enables dynamical spacetime variables such as \var{alp_metric_}, \var{beta_metric^C_}, \var{psi_metric_}, together with the CFC-oriented hydrodynamic path. \\
+\code{TABEOS} & variable registry / IMHD & Adds realistic-EOS composition variables \var{Dye_}, \var{Dymu_}, \var{ye_}, and \var{ymu_}.  The active EOS helpers \routine{eos_uses_ye} and \routine{eos_has_ymu} key off this logic. \\
+\code{M1} & variable registry / transport & Adds radiation moments for each compiled species: \var{nrad^KSP_}, \var{erad^KSP_}, \var{frad^KSP^C_}. \\
+\code{M1_RATES} & M1 microphysics & Activates emissivity, absorption, scattering, and number-rate infrastructure via \file{mod_m1_eas.t}. \\
+\code{M1_TAU_OPT} & M1 microphysics & Adds optical-depth support and the extra source-array slot \var{tau_path}. \\
+\code{GW_BR} & CFC / post-processing & Adds gravitational-wave backreaction variables and solvers. \\
+\code{-nspecies=3} & preprocessor flag in makefile & Compile three radiation species, typically $\nu_e$, $\bar\nu_e$, and $\nu_x$. \\
+\code{-nspecies=5} & preprocessor flag in makefile & Compile five radiation species, namely the three standard species plus $\nu_\mu$ and $\bar\nu_\mu$.  In the current active path this is the required build for muonic radiation transport. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Runtime namelists and user-facing parameters}
+
+The main runtime reader is \file{BHAC/src/amrvacio/amrio.t}.  The most important namelists for daily use are:
+\begin{itemize}[leftmargin=1.8em]
+\item \var{filelist}: file names, conversion targets, primitive-name ordering for import;
+\item \var{savelist}: snapshot and slice cadence;
+\item \var{methodlist}: Riemann solver, limiter, update scheme, inversion method, and small-value handling;
+\item \var{boundlist}: boundary-condition strings;
+\item \var{amrlist}: AMR hierarchy and domain size;
+\item \var{cfclist}: conformal-flatness and metric-update controls;
+\item \var{eoslist}: EOS type and EOS table names;
+\item \var{m1list}: transport species, rate mode, floors, tables, and microphysical toggles;
+\item \var{outflowlist}: Healpix detector settings.
+\end{itemize}
+
+The current EOS and M1 combinations are:
+\begin{enumerate}[leftmargin=1.8em]
+\item \textbf{Plain baryonic realistic EOS:} \var{eos_type_input='tabulated'} with a 3D EOS table.
+\item \textbf{Leptonic 4D EOS:} \var{eos_type_input='leptonic'} with both \var{baryon_table_name} and \var{leptonic_table_name}.
+\item \textbf{Three-spec M1 with Weakhub:} \var{m1_use_neutrinos=T}, \var{m1_use_muons=F}, \var{m1_rates_Weakhub=T}.
+\item \textbf{Three-spec M1 with analytical rates:} same species choice, but \var{m1_rates_Weakhub=F}, \var{m1_rates_analytical=T}.
+\item \textbf{Five-spec muonic M1:} \var{m1_use_neutrinos=T}, \var{m1_use_muons=T}, \var{m1_use_5_species=T}, \var{m1_rates_Weakhub=T}.  The active code explicitly forbids analytical five-spec mode.
+\end{enumerate}
+
+\subsection{Important consistency rules}
+
+The active code enforces several consistency checks at startup, and they should be treated as part of the user guide:
+\begin{itemize}[leftmargin=1.8em]
+\item five-spec transport requires the leptonic EOS path and \var{lep_use_muons=.true.};
+\item muonic transport requires a matching muonic Weakhub table;
+\item the active gray Weakhub path currently supports \var{Weakhub_grey_method = 1};
+\item build-time species count and runtime species choice must match;
+\item restart files generated with three species are not restart-compatible with five-spec builds because the state-vector layout differs.
+\end{itemize}
+
+\section{Source Tree and Active Code Structure}
+
+\begin{longtable}{L{0.23\textwidth}L{0.27\textwidth}L{0.38\textwidth}}
+\caption{Directory-level structure of the active compiled source tree.}\\
+\toprule
+Directory & Main responsibility & Representative files \\
+\midrule
+\endfirsthead
+\toprule
+Directory & Main responsibility & Representative files \\
+\midrule
+\endhead
+\dir{BHAC/src} & top-level driver, AMR, global state, reconstruction, update driver & \file{amrvac.t}, \file{advance.t}, \file{finite_volume.t}, \file{finite_difference.t}, \file{mod_variables.t} \\
+\dir{BHAC/src/imhd} & GRMHD physics interface, primitive/conservative transforms, fluxes, sources & \file{amrvacphys.t}, \file{mod_imhd_con2prim.t}, \file{mod_imhd_intermediate.t}, \file{mod_physaux.t} \\
+\dir{BHAC/src/eos_modules} & generic EOS interface, tabulated EOS, realistic-EOS table readers & \file{mod_eos.t}, \file{mod_eos_tabulated.t} \\
+\dir{BHAC/src/eos_modules/leptonic} & 4D leptonic EOS tables and baryon+electron+muon composition logic & \file{mod_eos_leptonic.t}, \file{mod_eos_leptonic_parameters.t} \\
+\dir{BHAC/src/geometry} & coordinate-system and metric helpers, geometric operators & \file{geometry.t}, \file{mod_metric.t}, \file{mod_coord_*.t} \\
+\dir{BHAC/src/geometry/cfc} & conformal-flatness metric solver and GW backreaction & \file{mod_cfc.t}, \file{mod_cfc_psi.t}, \file{mod_cfc_alp.t}, \file{mod_cfc_beta.t}, \file{mod_gw_br.t} \\
+\dir{BHAC/src/m1} & M1 transport, closure, implicit collisional solve, microphysics, diagnostics & \file{mod_m1.t}, \file{mod_m1_closure.t}, \file{mod_m1_collisional.t}, \file{mod_m1_eas.t} \\
+\dir{BHAC/src/amrvacio} & parameter input, snapshot I/O, conversion, analysis, Healpix detectors & \file{amrio.t}, \file{convert.t}, \file{analysis.t}, \file{mod_healpix_det.t} \\
+\dir{BHAC/src/ID_reader} & import of external initial data from XNS and FIL/Carpet-style HDF5 data & \file{mod_c2b.t}, \file{mod_c2b_cart3d.t}, \file{mod_xns.t} \\
+\dir{BHAC/src/modules} & generic utilities: constants, rootfinding, interpolation, timing, linear algebra & \file{mod_rootfinding.t}, \file{mod_interpolate.t}, \file{mod_lu.t}, \file{mod_lnsrch.t} \\
+\dir{BHAC/tests} & user problem setups, test makefiles, example parameter files & \file{BNS_SFHO}, \file{BNS_SFHO_muons} \\
+\bottomrule
+\end{longtable}
+
+\section{Global Control Flow}
+
+\subsection{Program entry and startup}
+
+The main executable entry point is the program \routine{amrvac} in \file{BHAC/src/amrvac.t}.  The startup sequence is:
+\begin{enumerate}[leftmargin=1.8em]
+\item start MPI communications through \routine{comm_start};
+\item register variables with \routine{setup_variables};
+\item read command-line and namelist parameters through \routine{readcommandline} and \routine{readparameters};
+\item initialize storage and communication types;
+\item call \routine{initglobal} to initialize physics globals;
+\item if M1 is compiled, call \routine{m1_startup};
+\item either read a restart snapshot or initialize level-one grids, then build the AMR tree;
+\item initialize boundary-flux arrays, multigrid, metric solvers, import data, and user hooks;
+\item enter the time-integration loop through \routine{timeintegration}.
+\end{enumerate}
+
+\subsection{The time integration loop}
+
+The routine \routine{timeintegration} in \file{amrvac.t} is the top-level evolution driver.  Its logic is:
+\begin{enumerate}[leftmargin=1.8em]
+\item select active grids and compute the next time step via \routine{setdt};
+\item run requested output through \routine{saveamrfile};
+\item call \routine{advance(it)} for one hydro/M1 update;
+\item evaluate residuals, regrid if needed, and rebuild detectors if the AMR tree changed;
+\item update counters and physical time;
+\item terminate on \var{itmax}, \var{tmax}, residual bounds, or user interruption.
+\end{enumerate}
+
+\subsection{Advance and update splitting}
+
+The routine \routine{advance} in \file{BHAC/src/advance.t} is the bridge between the global loop and the per-grid numerical update.  Its responsibilities are:
+\begin{itemize}[leftmargin=1.8em]
+\item source splitting before transport when enabled;
+\item thermal conduction subcycling if compiled;
+\item implicit source updates through \routine{addsource_impl} for stiff radiation coupling;
+\item dimensional splitting or unsplit transport through \routine{advect};
+\item post-transport source updates;
+\item primitive recovery after the update;
+\item metric updates through the CFC solver and optional GW backreaction;
+\item boundary-condition refresh for the next step.
+\end{itemize}
+
+The transport branch itself goes through \routine{advect}, \routine{advect1}, \routine{process1_grid}, and \routine{advect1_grid}.  These routines coordinate:
+\begin{itemize}[leftmargin=1.8em]
+\item reconstruction;
+\item flux evaluation;
+\item geometric source terms;
+\item explicit and implicit source splitting;
+\item per-grid M1 helper-state allocation;
+\item calls into \file{finite_volume.t} or \file{finite_difference.t}.
+\end{itemize}
+
+\section{Variable Layout, State Vectors, and Preprocessor Notation}
+
+\subsection{Variable classes}
+
+The variable registry lives in \file{BHAC/src/mod_variables.t}.  The routine \routine{setup_variables} assigns the global indices used everywhere else.  The code distinguishes:
+\begin{itemize}[leftmargin=1.8em]
+\item conservative variables (\var{cons_var});
+\item primitive variables (\var{prim_var});
+\item tracers (\var{tracer_var});
+\item auxiliary variables (\var{aux_var});
+\item extra variables (\var{extra_var});
+\item GW-backreaction variables (\var{gwbr_var});
+\item radiation variables (\var{radiation_var});
+\item radiation implicit-source variables (\var{radiation_impl_var}).
+\end{itemize}
+
+\subsection{Hydrodynamic and spacetime variables}
+
+In the active dynamical-spacetime path:
+\begin{itemize}[leftmargin=1.8em]
+\item fluid conservatives include \var{D_}, \var{s^C_}, \var{tau_}, magnetic field \var{b^C_}, and, when realistic EOS support is active, \var{Dye_} and \var{Dymu_};
+\item fluid primitives include \var{T_eps_}, \var{rho_}, \var{u^C_}, and, when realistic EOS support is active, \var{ye_} and \var{ymu_};
+\item metric variables include \var{alp_metric_}, \var{beta_metric^C_}, \var{Xvec_metric^C_}, and \var{psi_metric_};
+\item optional GW-backreaction variables include \var{U_br_}, \var{h_00_}, and related quantities.
+\end{itemize}
+
+\subsection{Radiation variables}
+
+When \var{M1} is compiled, each radiation species contributes:
+\begin{itemize}[leftmargin=1.8em]
+\item transported moments \var{nrad^KSP_}, \var{erad^KSP_}, \var{frad^KSP^C_};
+\item microphysical source coefficients \var{kappa_a^KSP_}, \var{kappa_s^KSP_}, \var{Q_er^KSP_}, \var{kappa_nr^KSP_}, \var{Q_nr^KSP_}, and \var{tau_path^KSP_}.
+\end{itemize}
+
+The active five-spec build therefore adds five copies of the number-energy-flux block and five copies of the source-coefficient block.
+
+\subsection{Internal M1 state conventions}
+
+The internal M1 transport state is defined in \file{BHAC/src/m1/mod_m1_internal.t}:
+\begin{equation}
+\label{eq:m1-internal}
+\mathbf{U}_{\rm rad} = (E, F_1, F_2, F_3),
+\end{equation}
+with the internal indexing
+\[
+\var{m1_energy_} = 1, \qquad \var{m1_flux^C_} = \var{m1_energy_} + C.
+\]
+
+The closure helper structure in \file{mod_m1_closure.t} stores derived quantities such as:
+\begin{itemize}[leftmargin=1.8em]
+\item lab-frame moments \var{E}, \var{F_low}, \var{F_up}, \var{F2};
+\item fluid velocity \var{vel} and Lorentz factor \var{W};
+\item closure variables \var{zeta}, \var{chi}, \var{dthin}, \var{dthick};
+\item fluid-frame moments \var{J}, \var{H_low}, \var{H_up}, \var{Gamma}.
+\end{itemize}
+
+\section{Geometry, Coordinates, and Metric Infrastructure}
+
+\subsection{Physics and numerical role}
+
+The geometry layer does three jobs:
+\begin{enumerate}[leftmargin=1.8em]
+\item define the background coordinate mapping and metric coefficients;
+\item compute geometric operators such as gradients, divergences, curls, and reconstruction helpers;
+\item provide the metric and source-term infrastructure needed by GRMHD, CFC, GW backreaction, and M1 transport.
+\end{enumerate}
+
+\subsection[Core geometry routines in geometry.t]{Core geometry routines in \file{geometry.t}}
+
+\begin{longtable}{L{0.24\textwidth}L{0.24\textwidth}L{0.42\textwidth}}
+\caption{Routine inventory for \file{BHAC/src/geometry/geometry.t}.}\\
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endfirsthead
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endhead
+\routine{set_pole} & pole handling & Sets geometry-dependent information near coordinate singularities. \\
+\routine{getgridgeo} & per-grid geometry allocation & Builds the geometry container for one grid. \\
+\routine{dealloc_myM} & release geometry & Frees per-grid metric/geometry storage. \\
+\routine{putgridgeo} & store geometry & Writes geometry structures back into the grid container. \\
+\routine{fillgeo} & metric fill and geometric factors & Populates metric coefficients, volume factors, and related grid geometry. \\
+\routine{gradient} & gradient operator & Computes directional derivatives on the grid box. \\
+\routine{upwindGradientS} & upwind scalar gradient & Used in source terms and reconstruction-sensitive contexts. \\
+\routine{gradientS} & scalar gradient helper & Scalar-specific variant of \routine{gradient}. \\
+\routine{divvector} & divergence of a vector & Computes $\nabla_i v^i$ with geometry factors. \\
+\routine{curl3} & three-dimensional curl & Computes the spatial curl for vector diagnostics. \\
+\routine{curlvector} & generic curl wrapper & Higher-level curl helper with direction control. \\
+\routine{divvectorS} & divergence helper & Scalar-form divergence interface. \\
+\routine{rec} & reconstruction helper & Builds left/right reconstructed interface states. \\
+\bottomrule
+\end{longtable}
+
+\subsection[Metric interface in mod\_metric.t]{Metric interface in \file{mod_metric.t}}
+
+The core metric module provides local metric access independent of the specific coordinate family.  The main visible routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{init_coord_check}: validate the chosen coordinate setup;
+\item \routine{get_g4}: compute the covariant spacetime metric $g_{\mu\nu}$ and optionally its derivatives;
+\item \routine{g4inv}: compute the inverse metric $g^{\mu\nu}$;
+\item \routine{get_sqrtgamma}: compute $\sqrt{\gamma}$, the determinant of the spatial metric.
+\end{itemize}
+
+The actual coordinate systems are implemented in the family of \file{mod_coord_*.t} files.  These define analytic or numerical coordinate maps such as Cartesian, spherical, Kerr-Schild-like, black-hole-adapted, cylindrical, and CFC coordinates.
+
+\subsection{CFC metric solver}
+
+The active CFC driver is \file{BHAC/src/geometry/cfc/mod_cfc.t}.  The solver treats the spacetime in conformal-flatness form,
+\begin{equation}
+\gamma_{ij} = \psi^4 \hat{\gamma}_{ij},
+\end{equation}
+and evolves or solves for the metric potentials:
+\begin{itemize}[leftmargin=1.8em]
+\item the conformal factor $\psi$;
+\item the lapse $\alpha$;
+\item the shift vector $\beta^i$.
+\end{itemize}
+
+The high-level routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{cfc_update_flag}: determine whether the metric should be updated at the current step;
+\item \routine{cfc_solver_activate}: enable multigrid and register CFC settings;
+\item \routine{cfc_metric_init}: initialize the CFC metric from imported or user-defined data;
+\item \routine{cfc_solve_metric}: solve the elliptic CFC equations during evolution;
+\item \routine{cfc_check_metric}: optional quality control on the metric fields.
+\end{itemize}
+
+The actual elliptic solves are split into specialized modules:
+\begin{itemize}[leftmargin=1.8em]
+\item \file{mod_cfc_psi.t} for the conformal factor;
+\item \file{mod_cfc_alp.t} for the lapse;
+\item \file{mod_cfc_beta.t} for the shift;
+\item \file{mod_cfc_parameters.t} for user-facing controls and scheduling.
+\end{itemize}
+
+\subsection{GW backreaction}
+
+The GW backreaction driver lives in \file{BHAC/src/geometry/cfc/mod_gw_br.t}.  Its public interface is intentionally small:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{gw_br_activate};
+\item \routine{gw_br_update_flag};
+\item \routine{solve_gw_br}.
+\end{itemize}
+
+Its job is to compute post-Newtonian or quadrupole-style backreaction corrections using quantities such as:
+\begin{itemize}[leftmargin=1.8em]
+\item matter source combinations such as $\sigma$ and enthalpy-weighted velocity sources;
+\item potentials \var{U_br_} and related derivatives;
+\item quadrupole-like tensors through modules such as \file{mod_gw_br_Iij_Qij.t}.
+\end{itemize}
+
+\section{EOS Framework}
+
+\subsection[Generic EOS interface in mod\_eos.t]{Generic EOS interface in \file{mod_eos.t}}
+
+The generic EOS module is a pointer-based dispatch layer.  It does not implement one EOS by itself; instead, it stores the active EOS type and a table of function pointers for pressure, energy, temperature, sound speed, composition-dependent helper calls, and atmosphere support.
+
+The central design point is that all physics layers above the EOS call the generic interfaces:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{eos_get_pressure_one_grid};
+\item \routine{eos_get_eps_one_grid};
+\item \routine{eos_get_cs2_one_grid};
+\item \routine{eos_get_temp_one_grid};
+\item \routine{eos_eps_get_all_one_grid};
+\item \routine{eos_temp_get_all_one_grid};
+\item \routine{eos_get_all_beta_eqm_one_grid}.
+\end{itemize}
+
+The helpers
+\[
+\routine{eos_uses_ye} \quad \text{and} \quad \routine{eos_has_ymu}
+\]
+are the key runtime queries that let the rest of the code distinguish:
+\begin{itemize}[leftmargin=1.8em]
+\item plain ideal-gas or polytropic EOS;
+\item 3D realistic table EOS depending on $(\rho, T, Y_e)$;
+\item 4D leptonic EOS depending on $(\rho, T, Y_e, Y_\mu)$.
+\end{itemize}
+
+\subsection{Atmosphere model}
+
+\file{mod_eos.t} also contains atmosphere support:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{eos_atmo_activate};
+\item \routine{eos_initialize_atmo};
+\item \routine{atmo_get_pressure_one_grid};
+\item \routine{atmo_get_eps_one_grid};
+\item \routine{atmo_get_cs2_one_grid}.
+\end{itemize}
+
+The atmosphere can be:
+\begin{itemize}[leftmargin=1.8em]
+\item a simple polytropic/ideal-gas atmosphere;
+\item a beta-equilibrium atmosphere based on the active realistic EOS.
+\end{itemize}
+
+This atmosphere layer defines the lower bounds \var{small_rho}, \var{small_eps}, \var{small_press}, \var{small_temp}, \var{small_D}, and \var{small_tau} used by primitive recovery and small-value replacement.
+
+\subsection[Tabulated EOS in mod\_eos\_tabulated.t]{Tabulated EOS in \file{mod_eos_tabulated.t}}
+
+The tabulated EOS module implements realistic 3D table access.  The independent variables are density, temperature, and electron fraction:
+\begin{equation}
+(\rho, T, Y_e) \longrightarrow \left(p, \epsilon, c_s^2, s, \mu_e, \mu_p, \mu_n, \ldots\right).
+\end{equation}
+
+The module supports at least two reader families:
+\begin{itemize}[leftmargin=1.8em]
+\item \var{scollapse};
+\item \var{compose}.
+\end{itemize}
+
+The central routines are listed in Table~\ref{tab:eos-tabulated}.
+
+\begin{longtable}{L{0.28\textwidth}L{0.22\textwidth}L{0.38\textwidth}}
+\caption{Routine inventory for \file{BHAC/src/eos_modules/mod_eos_tabulated.t}.}
+\label{tab:eos-tabulated}\\
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endfirsthead
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endhead
+\routine{eos_tabulated_read_params} & select table reader & Switch between \var{scollapse} and \var{compose}. \\
+\routine{eos_tabulated_activate} & register tabulated EOS & Binds generic EOS pointers to tabulated implementations. \\
+\routine{tabulated_get_pressure_one_grid} & $p(\rho,\epsilon,Y_e)$ or $p(\rho,T,Y_e)$ & Converts $\epsilon \rightarrow T$ when needed, then interpolates pressure. \\
+\routine{tabulated_get_eps_one_grid} & $\epsilon(\rho,T,Y_e)$ & Direct interpolation of specific internal energy. \\
+\routine{tabulated_get_cs2_one_grid} & sound speed & Returns bounded relativistic $c_s^2$. \\
+\routine{tabulated_get_temp_one_grid} & invert $\epsilon \rightarrow T$ & Root-finds or interpolates the temperature for fixed $\rho$ and $Y_e$. \\
+\routine{tabulated_eps_get_all_one_grid} & bulk query at fixed $\epsilon$ & Returns thermodynamics and composition with optional chemical potentials. \\
+\routine{tabulated_temp_get_all_one_grid} & bulk query at fixed $T$ & Direct table query used heavily by M1 and con2prim. \\
+\routine{tabulated_get_eps_range} & EOS validity range & Returns the $\epsilon$ interval spanned by the table at given $\rho$ and $Y_e$. \\
+\routine{tabulated_logeps_to_logtemp} & energy-temperature inversion & Root-finds $T$ in log space using the table and EOS consistency. \\
+\routine{tabulated_get_all_beta_eqm_one_grid} & beta-equilibrium EOS state & Solves for a beta-equilibrium composition at fixed $(\rho,T)$. \\
+\bottomrule
+\end{longtable}
+
+Numerically, the tabulated EOS path relies on interpolation tables stored in \file{mod_eos_tabulated_parameters.t} and on interpolation kernels in \file{mod_eos_interpolation.t}.  The key algorithmic feature is that many queries reduce to:
+\begin{enumerate}[leftmargin=1.8em]
+\item convert the physical inputs into table coordinates;
+\item clamp or reject values outside the validity range;
+\item interpolate one or several tables;
+\item if only $\epsilon$ is known, invert for $T$ first and then interpolate the desired quantity.
+\end{enumerate}
+
+\subsection[Leptonic 4D EOS in mod\_eos\_leptonic.t]{Leptonic 4D EOS in \file{mod_eos_leptonic.t}}
+
+The leptonic EOS extension adds a physically separate treatment of baryons, electrons/positrons, and muons/antimuons.  The active architecture uses three tables:
+\begin{enumerate}[leftmargin=1.8em]
+\item a baryon table indexed by $(\rho, T, Y_p)$ with $Y_p = Y_e + Y_\mu$;
+\item an electronic leptonic table indexed by $(\rho, T, Y_e)$;
+\item a muonic leptonic table indexed by $(\rho, T, \log Y_\mu)$.
+\end{enumerate}
+
+The total thermodynamics are assembled as
+\begin{align}
+P_{\rm tot} &= P_{\rm baryon} + P_e + P_\mu, \\
+\epsilon_{\rm tot} &= \epsilon_{\rm baryon} + \epsilon_e + \epsilon_\mu, \\
+s_{\rm tot} &= s_{\rm baryon} + s_e + s_\mu.
+\end{align}
+
+The main routines are listed in Table~\ref{tab:eos-leptonic}.
+
+\begin{longtable}{L{0.29\textwidth}L{0.21\textwidth}L{0.36\textwidth}}
+\caption{Routine inventory for \file{BHAC/src/eos_modules/leptonic/mod_eos_leptonic.t}.}
+\label{tab:eos-leptonic}\\
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endfirsthead
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endhead
+\routine{eos_leptonic_activate} & register 4D leptonic EOS & Reads baryon and leptonic tables and binds the generic EOS pointers. \\
+\routine{lep_bound_ye_ymu} & composition bounding & Clamps $Y_e$ and $Y_\mu$, builds $Y_p=Y_e+Y_\mu$, and optionally resets $Y_\mu$ if $Y_p$ would exceed the baryon-table range. \\
+\routine{lep_bound_rho_temp} & thermodynamic bounding & Clamps density and temperature to the 4D table limits. \\
+\routine{leptonic_eval_total_from_logs} & core thermodynamic evaluator & Interpolates the baryon, electron, and muon tables and assembles the total state. \\
+\routine{leptonic_get_pressure_one_grid} & pressure query & Uses either an input temperature or a prior inversion of $\epsilon \rightarrow T$. \\
+\routine{leptonic_get_eps_one_grid} & internal-energy query & Fixed-temperature query into the total EOS. \\
+\routine{leptonic_get_cs2_one_grid} & sound speed query & Returns total $c_s^2$ with physical clamping. \\
+\routine{leptonic_get_temp_one_grid} & invert $\epsilon \rightarrow T$ & Root-finds the temperature against the assembled 4D EOS. \\
+\routine{leptonic_get_eps_range} & validity range & Returns the minimum and maximum $\epsilon$ available at fixed $(\rho,Y_e,Y_\mu)$. \\
+\routine{leptonic_temp_get_all_one_grid} & main fixed-$T$ query & Returns the assembled thermodynamics and chemical potentials. \\
+\routine{leptonic_eps_get_all_one_grid} & fixed-$\epsilon$ query & Calls the temperature inversion first, then the full evaluator. \\
+\routine{leptonic_find_ye_of_mumu} & invert $Y_e$ from $\mu_\mu$ & Root-find helper for muon equilibrium. \\
+\routine{leptonic_find_betaeq_ye} & beta-equilibrium $Y_e$ & Root-find helper for beta-equilibrium proton content. \\
+\routine{leptonic_get_all_beta_eqm_one_grid} & beta-equilibrium state & Returns beta-equilibrium composition and optionally a consistent $Y_\mu$. \\
+\bottomrule
+\end{longtable}
+
+The parameter module \file{mod_eos_leptonic_parameters.t} defines:
+\begin{itemize}[leftmargin=1.8em]
+\item the table names \var{baryon_table_name} and \var{leptonic_table_name};
+\item the table axes and data arrays;
+\item bounds such as \var{lep_eos_rhomin}, \var{lep_eos_tempmax}, \var{lep_eos_ymumin};
+\item behavioral flags such as \var{lep_use_muons}, \var{lep_add_ele_contribution}, \var{lep_fix_ymu_high_yp}, and \var{lep_extend_table_high}.
+\end{itemize}
+
+\subsection{Why the generic EOS helpers matter}
+
+Several major code paths deliberately call \routine{eos_uses_ye()} and \routine{eos_has_ymu()} instead of checking a specific EOS type.  This is essential because:
+\begin{itemize}[leftmargin=1.8em]
+\item both tabulated and leptonic EOSs require \var{Ye};
+\item only the leptonic EOS requires \var{Ymu};
+\item the rest of the hydro, import, and M1 source code should branch on \emph{which primitive variables are physically active}, not on a hard-coded EOS integer.
+\end{itemize}
+
+\section{GRMHD Physics Layer}
+
+\subsection{Conserved and primitive variables}
+
+The GRMHD layer in \file{BHAC/src/imhd/amrvacphys.t} evolves the usual conservative state.  In the active relativistic primitive formulation, the code uses
+\begin{align}
+D &= \rho W, \\
+\xi &= \rho h W^2, \\
+S_i &= (\xi + B^2) v_i - (v \cdot B) B_i, \\
+\tau &= \xi - p - D + \frac{1}{2}\left(B^2 + B^2 v^2 - (v \cdot B)^2\right),
+\end{align}
+with additional composition conservatives
+\begin{equation}
+D Y_e \equiv \var{Dye_}, \qquad D Y_\mu \equiv \var{Dymu_}.
+\end{equation}
+
+Here $W$ is the fluid Lorentz factor, $h=1+\epsilon+p/\rho$ is the specific enthalpy, and $B^i$ is the magnetic field in the Eulerian frame.
+
+\subsection[Interface routines in amrvacphys.t]{Interface routines in \file{amrvacphys.t}}
+
+\begin{longtable}{L{0.25\textwidth}L{0.22\textwidth}L{0.41\textwidth}}
+\caption{Main GRMHD interface routines in \file{BHAC/src/imhd/amrvacphys.t}.}\\
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endfirsthead
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endhead
+\routine{getdt} & local time-step contribution & Provides the GRMHD contribution to the CFL step. \\
+\routine{checkglobaldata} & validate global physics settings & Initializes or checks floors and equation-of-state consistency. \\
+\routine{initglobaldata} & initialize physics parameters & Sets default $\gamma$, adiabatic constants, and related global parameters. \\
+\routine{conserve} & primitive-to-conservative wrapper & Calls the active \routine{conserven} implementation. \\
+\routine{conserven} & primitive-to-conservative transform & There are dynamic-spacetime and static-spacetime branches; both build \var{D_}, \var{s^C_}, \var{tau_}, composition conservatives, and preserve magnetic fields. \\
+\routine{primitive} & conservative-to-primitive wrapper & Calls the dedicated con2prim module. \\
+\routine{getv} & velocity extraction & Returns transport velocities for a given direction. \\
+\routine{get_cbounds} & characteristic bounds & Builds left/right wave-speed bounds for the Riemann solver. \\
+\routine{get_lambda} & characteristic speeds & Includes M1 contributions when radiation transport is active. \\
+\routine{getcmax} / \routine{getcmax_old} & scalar max-speed estimates & Used by CFL logic and older flux paths. \\
+\routine{getflux} & flux calculation & Builds GRMHD fluxes and switches off transport for variables that should not be advected directly. \\
+\routine{addgeometry} & geometric source terms & Applies metric-derivative source terms and couples to M1 geometry when active. \\
+\routine{addsource} & user/source-driver wrapper & Routes source splitting to physics and user hooks. \\
+\routine{getcurrent} & current diagnostic & Computes spatial current from the magnetic field. \\
+\routine{addsource_elecheating} & heating source helper & Specialized electron-entropy or heating source path. \\
+\routine{calheatingrate} & heating-rate diagnostic & Computes heating-related derived quantities. \\
+\routine{e_to_rhos} / \routine{rhos_to_e} & variable conversion helper & Converts between energy and entropy-like storage variants. \\
+\routine{implicit_update} & stiff source update & Calls the implicit update path used for radiation-coupled source terms. \\
+\bottomrule
+\end{longtable}
+
+\subsection[Primitive recovery in mod\_imhd\_con2prim.t]{Primitive recovery in \file{mod_imhd_con2prim.t}}
+
+The routine \routine{imhd_con2prim} is the active conservative-to-primitive recovery for the realistic EOS path.  The method is a root solve in auxiliary variables denoted by $\mu_+$ and $\mu$ in the code, together with repeated EOS calls to recover:
+\[
+\rho, \quad \epsilon, \quad T, \quad Y_e, \quad Y_\mu, \quad p, \quad W, \quad v^i.
+\]
+
+The internal workflow is:
+\begin{enumerate}[leftmargin=1.8em]
+\item extract and rescale the conservative state;
+\item determine composition from \var{Dye_}/\var{D_} and \var{Dymu_}/\var{D_} when active;
+\item compute bounds for the auxiliary unknown;
+\item solve the root problem using constrained Newton-Raphson and Brent fallback;
+\item reconstruct the primitive state and limit it against floors and Lorentz-factor bounds;
+\item call the EOS to obtain consistent thermodynamics.
+\end{enumerate}
+
+The module-specific routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{imhd_con2prim_setup};
+\item \routine{imhd_con2prim};
+\item internal helper \routine{get_vars};
+\item scalar root functions \routine{func_for_mu_plus}, \routine{d_mu_plus}, and \routine{func_for_mu}.
+\end{itemize}
+
+\subsection[Intermediate variables in mod\_imhd\_intermediate.t]{Intermediate variables in \file{mod_imhd_intermediate.t}}
+
+This module gathers all derived hydrodynamic and electrodynamic quantities needed outside the raw primitive/conservative transforms.  The most important routine is
+\[
+\routine{imhd_get_intermediate_variables},
+\]
+which can return any subset of:
+\begin{itemize}[leftmargin=1.8em]
+\item $\gamma_{ij}$ and $\gamma^{ij}$;
+\item $W$, $W^2$, and $v^2$;
+\item $B \cdot v$, $b^\mu$, $b^2$, and Eulerian electric field quantities;
+\item thermal and total enthalpy;
+\item thermal and total pressure;
+\item Bernoulli-based unboundness criterion.
+\end{itemize}
+
+Other important routines in this file are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{dysp_get_lfac};
+\item \routine{imhd_get_Efield_Eulerian};
+\item \routine{imhd_handle_small_values};
+\item \routine{Eos_update_one_grid} and \routine{Eos_update_one_point};
+\item \routine{imhd_modify_wLR};
+\item \routine{imhd_get_tilde_U}, \routine{imhd_get_tilde_S_i}, \routine{imhd_get_tilde_S};
+\item \routine{conformal_transformation} and \routine{inverse_conformal_trans};
+\item \routine{imhd_ppm_flatcd} and \routine{imhd_ppm_flatsh}.
+\end{itemize}
+
+\subsection[Auxiliary GRMHD diagnostics in mod\_physaux.t]{Auxiliary GRMHD diagnostics in \file{mod_physaux.t}}
+
+The diagnostics and stress-energy helper layer is implemented in \file{BHAC/src/imhd/mod_physaux.t}.  Its main routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{get_b2} and \routine{get_b2_pt};
+\item \routine{get_u4};
+\item \routine{get_b4};
+\item \routine{get_TEM4_ud};
+\item \routine{get_TPAKE4_ud};
+\item \routine{get_TEN4_ud}.
+\end{itemize}
+
+These routines are used by diagnostics, post-processing, outflow calculations, and any module that needs explicitly geometric stress-energy or four-vector quantities rather than just primitive variables.
+
+\section{M1 Radiation Transport}
+
+\subsection{Physical model}
+
+The active M1 implementation evolves number, energy, and flux moments for each radiation species:
+\begin{align}
+\partial_t (\sqrt{\gamma}\, N) + \partial_i \mathcal{F}^i_N &= \sqrt{\gamma}\, G_N, \\
+\partial_t (\sqrt{\gamma}\, E) + \partial_i \mathcal{F}^i_E &= \sqrt{\gamma}\, G_E, \\
+\partial_t (\sqrt{\gamma}\, F_j) + \partial_i \mathcal{F}^i_{F_j} &= \sqrt{\gamma}\, G_{F_j},
+\end{align}
+where the source terms contain:
+\begin{itemize}[leftmargin=1.8em]
+\item emissivities;
+\item absorption opacities;
+\item scattering opacities;
+\item number-emission and number-absorption terms;
+\item geometric source terms from the curved metric.
+\end{itemize}
+
+The moment system is closed through a Minerbo or Levermore closure by introducing an Eddington factor $\chi$ and blending optically thin and thick limits:
+\begin{equation}
+P^{ij} = d_{\rm thick} P^{ij}_{\rm thick} + d_{\rm thin} P^{ij}_{\rm thin},
+\qquad
+d_{\rm thin} = \frac{3\chi - 1}{2},
+\qquad
+d_{\rm thick} = 1 - d_{\rm thin}.
+\end{equation}
+
+\subsection{Species bookkeeping and startup}
+
+The species-selection logic is in \file{BHAC/src/m1/mod_m1.t}.  The routine \routine{m1_startup}:
+\begin{itemize}[leftmargin=1.8em]
+\item resets species indices;
+\item assigns active indices for $\nu_e$, $\bar\nu_e$, $\nu_x$, $\nu_\mu$, $\bar\nu_\mu$, and optionally photons;
+\item activates the closure module;
+\item activates gray M1 microphysics;
+\item reads Weakhub tables when the Weakhub path is selected.
+\end{itemize}
+
+The user-facing species and rate-mode parameters live in \file{BHAC/src/m1/mod_m1_eas_param.t}.  The most important ones are:
+\begin{itemize}[leftmargin=1.8em]
+\item \var{m1_i_nue}, \var{m1_i_nuebar}, \var{m1_i_nux}, \var{m1_i_mu}, \var{m1_i_mubar};
+\item \var{m1_rates_Weakhub}, \var{m1_rates_analytical};
+\item \var{beta_decay}, \var{plasmon_decay}, \var{bremstrahlung}, \var{pair_annihil};
+\item the fluid-variable indexing \var{idx_rho}, \var{idx_T}, \var{idx_Ye}, \var{idx_Ymu}.
+\end{itemize}
+
+\subsection[Transport routines in mod\_m1.t]{Transport routines in \file{mod_m1.t}}
+
+\begin{longtable}{L{0.27\textwidth}L{0.21\textwidth}L{0.36\textwidth}}
+\caption{Routine inventory for \file{BHAC/src/m1/mod_m1.t}.}\\
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endfirsthead
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endhead
+\routine{m1_startup} & initialize M1 subsystem & Set species indices, closure, and rate backends. \\
+\routine{m1_read_Weakhub} & table loading wrapper & Read the active Weakhub table through \file{mod_Weakhub_reader.t}. \\
+\routine{m1_get_wavespeeds} & characteristic speeds & Blend optically thin and thick wave speeds using closure variables. \\
+\routine{m1_get_fluxes} & transport fluxes & Build number, energy, and momentum fluxes in curved spacetime. \\
+\routine{m1_correct_asymptotic_fluxes_old} & historical corrector & Kept as an older implementation. \\
+\routine{m1_correct_asymptotic_fluxes} & asymptotic flux correction & Repairs interface fluxes in optically thin/thick asymptotic regimes. \\
+\routine{m1_add_geometrical_sources} & metric source terms & Adds lapse, shift, and spatial-metric derivative sources. \\
+\routine{m1_add_collisional_sources} & stiff microphysical coupling & Calls the implicit collisional update and backreaction logic. \\
+\bottomrule
+\end{longtable}
+
+\subsection[Closure and realizability in mod\_m1\_closure.t]{Closure and realizability in \file{mod_m1_closure.t}}
+
+The closure layer is the core admissibility and frame-conversion engine.  The most important routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{m1_closure_type_activate};
+\item \routine{m1_closure_activate};
+\item \routine{m1_update_closure};
+\item \routine{m1_enforce_realizability};
+\item \routine{m1_update_closure_ixD}.
+\end{itemize}
+
+The pointwise closure update \routine{m1_update_closure_ixD} does the heavy lifting:
+\begin{enumerate}[leftmargin=1.8em]
+\item compute metric-raised and metric-lowered fluxes;
+\item evaluate the closure parameter $\zeta$ by root finding if requested;
+\item compute $\chi$, $J$, $H_i$, and the normalization factor \var{Gamma};
+\item limit non-finite or acausal states;
+\item if necessary rescale $F_i$ so that
+\begin{equation}
+F_i F^i < E^2
+\end{equation}
+holds after the update.
+\end{enumerate}
+
+The separate routine \routine{m1_enforce_realizability} is applied on the densitized transported state and enforces:
+\begin{equation}
+E \ge E_{\rm atmo}, \qquad N \ge N_{\rm atmo}, \qquad F_i F^i < E^2.
+\end{equation}
+
+This routine is now a key safety barrier against negative energies, negative number densities, NaNs, and the previously observed $E^2 < F^2$ failure mode.
+
+\subsection[Implicit collisional source solve in mod\_m1\_collisional.t]{Implicit collisional source solve in \file{mod_m1_collisional.t}}
+
+The collisional update is formulated as a backward-Euler solve for the stiff local source operator:
+\begin{equation}
+\mathbf{U}^{n+1} = \mathbf{U}^{*} + \Delta t \, \mathbf{G}\!\left(\mathbf{U}^{n+1}\right).
+\end{equation}
+
+The central entry point is \routine{m1_get_implicit_collisional_sources}.  Its workflow is:
+\begin{enumerate}[leftmargin=1.8em]
+\item remove densitization by dividing by \var{sqrtg};
+\item update the closure so that $J$, $H_i$, and $\Gamma$ are consistent with the current iterate;
+\item store the explicit state and microphysical coefficients;
+\item solve the nonlinear system with a multidimensional Newton method and fallback multistart logic;
+\item enforce post-solve admissibility of the radiation state;
+\item update number and lepton-number source terms through \routine{m1_get_implicit_n_source};
+\item redensitize the updated state.
+\end{enumerate}
+
+The module also contains:
+\begin{itemize}[leftmargin=1.8em]
+\item Jacobian builders \routine{m1_collisional_jacobian}, \routine{m1_sources_jacobian}, and linearized variants;
+\item source evaluators \routine{m1_collisional_sources}, \routine{m1_sources_func}, and linearized variants;
+\item \routine{get_iter_initguess};
+\item unit-test helpers for isolated local solves.
+\end{itemize}
+
+\subsection[Rates and emissivity-absorption-scattering infrastructure in mod\_m1\_eas.t]{Rates and emissivity-absorption-scattering infrastructure in \file{mod_m1_eas.t}}
+
+The file \file{BHAC/src/m1/mod_m1_eas.t} is the main microphysical dispatcher.  It handles:
+\begin{itemize}[leftmargin=1.8em]
+\item activation of the gray microphysics backend;
+\item computation of per-cell emissivity, absorption, scattering, number-emission, and number-absorption rates;
+\item optional beta-equilibrium relaxation of the fluid state;
+\item both Weakhub and analytical three-spec source models.
+\end{itemize}
+
+\begin{longtable}{L{0.30\textwidth}L{0.20\textwidth}L{0.34\textwidth}}
+\caption{Routine inventory for \file{BHAC/src/m1/mod_m1_eas.t}.}\\
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endfirsthead
+\toprule
+Routine & Purpose & Main logic / variables \\
+\midrule
+\endhead
+\routine{m1_eas_gray_activate} & choose gray backend & Registers the active gray rate provider, currently Weakhub for tabulated gray rates. \\
+\routine{m1_eas_activate} & consistency check & Ensures a rate backend is selected. \\
+\routine{m1_allocate_eas_ixD} / \routine{m1_deallocate_eas_ixD} & pointwise storage management & Allocate per-cell per-species source-coefficient buffers. \\
+\routine{m1_add_eas} & cell-wise EAS assembly & For each species, compute closure variables, call the active rate model, and write \var{wradimpl}. \\
+\routine{calculate_m1_eas_ixD} & main local rate calculator & Dispatch between Weakhub and analytical rates, apply beta-equilibrium coupling, and return \var{eas}. \\
+\routine{m1_eas_analytic_brems} & heavy-lepton bremsstrahlung & Add bremsstrahlung emission and number source terms. \\
+\routine{m1_eas_analytic_pair} & pair annihilation & Add pair-process contributions. \\
+\routine{m1_eas_analytic_plasmon} & plasmon decay & Add plasmon-decay contributions. \\
+\routine{m1_eas_analytic_kappa_AN} & analytical opacities & Compute analytical absorption and number-opacity pieces. \\
+\routine{Q_Ruffert} & Ruffert-like free emission & Compute free emissivities before optical-depth reduction. \\
+\routine{m1_eas_analytic} & analytical 3-spec model & Assemble the full analytical source vector for the active species. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Weakhub gray tables}
+
+The active Weakhub gray table reader is \file{BHAC/src/m1/mod_Weakhub_reader.t}.  It reads HDF5 tables containing:
+\begin{itemize}[leftmargin=1.8em]
+\item energy absorption opacities;
+\item number absorption opacities;
+\item scattering opacities;
+\item 3D or 4D table axes in $(\log\rho, \log T, Y_e)$ or $(\log\rho, \log T, Y_e, \log Y_\mu)$;
+\item species count and table metadata.
+\end{itemize}
+
+For gray transport, \file{mod_m1_eas_microphysical_gray.t} performs:
+\begin{itemize}[leftmargin=1.8em]
+\item trilinear interpolation for three-spec mode;
+\item quadrilinear interpolation for four-dimensional muonic mode;
+\item per-species lookup of \var{k_a}, \var{k_s}, and \var{k_n}.
+\end{itemize}
+
+This is the reason the active five-spec muonic branch requires a true 4D muonic Weakhub table.
+
+\subsection{Analytical rates}
+
+The analytical path is currently restricted to three species.  Its physics content mirrors the FIL-style three-spec treatment:
+\begin{itemize}[leftmargin=1.8em]
+\item charged-current beta processes for $\nu_e$ and $\bar\nu_e$;
+\item neutral-current scattering;
+\item optional pair annihilation;
+\item optional nucleon bremsstrahlung;
+\item optional plasmon decay.
+\end{itemize}
+
+The active code therefore supports:
+\begin{itemize}[leftmargin=1.8em]
+\item \textbf{three species:} either Weakhub or analytical rates;
+\item \textbf{five species:} Weakhub only.
+\end{itemize}
+
+\subsection{Backreaction, beta equilibrium, diagnostics, and optical depth}
+
+\paragraph{Backreaction.}
+The routine \routine{m1_add_backreaction} in \file{mod_m1_backreaction.t} transfers collisional source terms from the radiation subsystem back into the hydrodynamic conserved variables.  It updates:
+\begin{itemize}[leftmargin=1.8em]
+\item \var{tau_} through the summed radiation energy source;
+\item \var{Dye_} through $\nu_e$ and $\bar\nu_e$ number sources;
+\item \var{Dymu_} through $\nu_\mu$ and $\bar\nu_\mu$ number sources when the leptonic EOS is active.
+\end{itemize}
+
+\paragraph{Beta equilibrium.}
+The file \file{mod_m1_beta_eq.t} solves a two-variable equilibrium problem for $(Y_e, T)$ at fixed density and fixed $Y_\mu$.  The two residual equations are:
+\begin{enumerate}[leftmargin=1.8em]
+\item lepton-number conservation between matter and trapped neutrinos;
+\item total internal-energy consistency between matter and trapped neutrino moments.
+\end{enumerate}
+
+The main entry point is \routine{m1_get_beta_equilibrium}, backed by:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{m1_beta_equilib_function};
+\item \routine{m1_beta_equilib_jacobian};
+\item \routine{m1_beta_equilib_min};
+\item \routine{betaeq_rootfinding_bounded_newton_raphson}.
+\end{itemize}
+
+\paragraph{Diagnostics.}
+The file \file{mod_m1_diagnostics.t} computes derived neutrino chemical-potential and number-density diagnostics through:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{m1_compute_diagnostics};
+\item \routine{m1_diagnostics_mu}.
+\end{itemize}
+
+\paragraph{Optical depth.}
+The optical-depth module \file{mod_m1_tau_optical.t} contains \routine{m1_add_tau}.  It:
+\begin{enumerate}[leftmargin=1.8em]
+\item computes equilibrium opacities using either Weakhub or the analytical rate path;
+\item estimates an empirical seed optical depth;
+\item sweeps neighboring cells and computes a metric-weighted path integral:
+\begin{equation}
+\tau_{\rm path} \approx \bar{\kappa}\, ds + \tau_{\rm empirical}.
+\end{equation}
+\end{enumerate}
+
+\section{I/O, Conversion, Import, and Healpix Detectors}
+
+\subsection[Runtime I/O in amrio.t]{Runtime I/O in \file{amrio.t}}
+
+The main runtime I/O hub is \file{BHAC/src/amrvacio/amrio.t}.  It handles:
+\begin{itemize}[leftmargin=1.8em]
+\item command-line parsing through \routine{readcommandline};
+\item full namelist parsing and runtime validation through \routine{readparameters};
+\item snapshot write/read in parallel and non-parallel formats;
+\item HDF5 snapshot I/O;
+\item XDMF metadata generation for HDF5 outputs;
+\item default logging through \routine{printlog_default}.
+\end{itemize}
+
+The main routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{readcommandline}, \routine{readparameters};
+\item \routine{saveamrfile};
+\item \routine{write_snapshot}, \routine{write_snapshot_nopar}, \routine{write_snapshot_noparf}, \routine{write_snapshot_hdf5};
+\item \routine{read_snapshot}, \routine{read_snapshot_nopar}, \routine{read_snapshot_noparf}, \routine{read_snapshot_hdf5};
+\item \routine{MakeXDMF};
+\item \routine{printlog_default}.
+\end{itemize}
+
+\subsection[Conversion and post-processing in convert.t]{Conversion and post-processing in \file{convert.t}}
+
+The conversion layer \file{BHAC/src/amrvacio/convert.t} is writer-heavy.  Its job is to transform in-memory AMR data into plot, slice, and unstructured output formats.  The routine groups are:
+\begin{itemize}[leftmargin=1.8em]
+\item orchestration: \routine{generate_plotfile}, \routine{oneblock}, \routine{onegrid}, \routine{calc_grid};
+\item header/metadata: \routine{getheadernames}, \routine{calc_x};
+\item IDL/DX/VTK/VTU/VTI/Tecplot writers: \routine{valout_idl}, \routine{valout_dx}, \routine{write_vtk}, \routine{write_vti}, \routine{write_pvtu}, \routine{tecplot}, \routine{tecplot_mpi}, \routine{unstructuredvtk}, \routine{unstructuredvtk_mpi}, and related helper routines;
+\item radiation-aware post-processing: \routine{post_rad}.
+\end{itemize}
+
+\subsection{Analysis hooks}
+
+The file \file{BHAC/src/amrvacio/analysis.t} contains the example routine \routine{write_analysis}.  It is intentionally a template-style extension point for user-defined integrated diagnostics.
+
+\subsection{External initial-data import}
+
+The import layer has three main parts:
+\begin{itemize}[leftmargin=1.8em]
+\item \file{mod_c2b.t}: 2D C2B profile import;
+\item \file{mod_xns.t}: XNS profile import;
+\item \file{mod_c2b_cart3d.t}: FIL/Carpet-style 3D HDF5 import.
+\end{itemize}
+
+\paragraph{\texttt{mod\_c2b.t}.}
+This module manages structured 2D initial-data profiles and provides:
+\begin{itemize}[leftmargin=1.8em]
+\item allocation and destruction;
+\item dimension and grid readers;
+\item metric and primitive/conservative profile readers;
+\item 1D and 2D interpolation helpers.
+\end{itemize}
+
+\paragraph{\texttt{mod\_xns.t}.}
+This module provides the same role for XNS data with routines for allocation, file reading, grid extraction, profile extraction, and 1D/2D interpolation.
+
+\paragraph{\texttt{mod\_c2b\_cart3d.t}.}
+This is the key module for 3D import from FIL/ETK/Carpet-like HDF5 output.  Its responsibilities are:
+\begin{enumerate}[leftmargin=1.8em]
+\item represent each imported variable as a hierarchy of refinement levels and Carpet data blocks;
+\item read the HDF5 attributes that define origin, spacing, ghost zones, and valid interpolation range;
+\item find which refinement level and block contain a requested point;
+\item interpolate one-point values using linear, Hermite, or higher-order Lagrangian interpolation.
+\end{enumerate}
+
+The key routines are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{init_single_variable}, \routine{init_single_reflevel}, \routine{init_single_datablock};
+\item \routine{load_selected_ref_and_datablock};
+\item \routine{destroy_single_variable}, \routine{destroy_single_reflevel};
+\item \routine{hdf5_read_attr_single_datablock}, \routine{hdf5_read_single_dataset};
+\item \routine{find_point_in_which_level}, \routine{find_point_in_which_datablock}, \routine{find_point};
+\item \routine{interp_cart3d_carpet_variable_one_point}, \routine{interp_one_point_from_dataset};
+\item interpolation kernels \routine{linear_interp_3d}, \routine{Hermitian_interp_3order_3d}, \routine{lagrangian_interp_high_order_3d}.
+\end{itemize}
+
+\subsection{Healpix outflow detectors}
+
+The detector module \file{BHAC/src/amrvacio/mod_healpix_det.t} computes shell and surface-integrated fluxes on spherical Healpix detectors.  It supports:
+\begin{itemize}[leftmargin=1.8em]
+\item mass flux;
+\item unbound mass flux;
+\item Poynting flux;
+\item shell quantities such as radial velocity, asymptotic velocity, angular velocity, inverse plasma beta, and specific angular momentum;
+\item M1 radiation outflow per species.
+\end{itemize}
+
+The workflow is:
+\begin{enumerate}[leftmargin=1.8em]
+\item initialize detectors and parse the selected outflow names through \routine{initialize_healpix_detectors};
+\item map Healpix indices to coordinates through \routine{get_coord_from_healpix_index};
+\item for each detector pixel, interpolate the requested fluid or radiation quantity and project it onto the radial normal;
+\item integrate over the sphere through \routine{surface_integral_outflow};
+\item optionally dump detector snapshots to HDF5 through \routine{save_outflow_snap_to_hdf5}.
+\end{enumerate}
+
+Important routines include:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{initialize_healpix_detectors}, \routine{destroy_healpix_detectors};
+\item \routine{initialize_single_detector}, \routine{cal_flux_single_detector};
+\item \routine{calculate_flux_m1}, \routine{calculate_flux_poynting}, \routine{calculate_flux_mass}, \routine{calculate_flux_unbound_mass};
+\item \routine{calculate_shell_inverse_beta}, \routine{calculate_shell_omega_xy}, \routine{calculate_shell_velo_parker_criterion}, \routine{calculate_shell_velo_asymptotic}, \routine{calculate_shell_velo_r}, \routine{calculate_shell_specific_j};
+\item \routine{projection_flux_on_sphere}, \routine{surface_integral_outflow}, \routine{calculate_all_outflow}, \routine{save_outflow_snap_to_hdf5}.
+\end{itemize}
+
+\section{Tests, Example Workflows, and Practical Use}
+
+\subsection{BNS test setups}
+
+The two key BNS setups in this workspace are:
+\begin{itemize}[leftmargin=1.8em]
+\item \dir{BHAC/tests/BNS_SFHO}: baryonic SFHo EOS workflow;
+\item \dir{BHAC/tests/BNS_SFHO_muons}: leptonic SFHo EOS with five M1 species.
+\end{itemize}
+
+\subsection{What the muonic test is demonstrating}
+
+The muonic test is a reference setup for the full BHAC+ extension chain:
+\begin{enumerate}[leftmargin=1.8em]
+\item 3D import of fluid, metric, and radiation fields from FIL/Carpet HDF5 output;
+\item leptonic EOS activation using a matching baryon table and 4D leptonic table;
+\item five-spec radiation transport with electron and muon neutrinos;
+\item Weakhub-based gray rates in 4D $(\rho,T,Y_e,Y_\mu)$;
+\item Healpix outflow diagnostics for both fluid and radiation species.
+\end{enumerate}
+
+\subsection{Why imported variable ordering matters}
+
+The import path in \file{amrvacusr.t} must match the \var{setup_variables} layout exactly.  This is especially important when:
+\begin{itemize}[leftmargin=1.8em]
+\item realistic EOS composition variables are compiled;
+\item the build uses three species versus five species;
+\item extra metric or GW variables are enabled.
+\end{itemize}
+
+For that reason, the \var{primnames} and \var{wnames} strings in the test parameter files are not cosmetic; they must reflect the actual order of the registered variables.
+
+\section{Extension Guide and Common Pitfalls}
+
+\subsection{Adding a new EOS or modifying an existing one}
+
+The clean extension pattern is:
+\begin{enumerate}[leftmargin=1.8em]
+\item add a dedicated module in \dir{BHAC/src/eos_modules};
+\item add any reader and parameter modules it needs;
+\item bind the generic EOS pointers in \routine{<new>_activate};
+\item use \routine{eos_uses_ye()} and \routine{eos_has_ymu()} in calling code instead of hard-coded EOS IDs whenever the real question is ``which composition variables are active?''.
+\end{enumerate}
+
+\subsection{Adding new radiation species or rate models}
+
+The key places to modify are:
+\begin{itemize}[leftmargin=1.8em]
+\item \file{mod_m1_eas_param.t} for species indices and runtime flags;
+\item \file{mod_m1.t} for startup indexing and transport assumptions;
+\item \file{mod_variables.t} for state-vector registration;
+\item \file{mod_m1_eas.t} for the actual rate logic;
+\item \file{mod_m1_backreaction.t} for matter-coupling consistency;
+\item test \file{amrvacusr.t} and \file{import.par} files for import and diagnostics.
+\end{itemize}
+
+\subsection{Common failure modes}
+
+\paragraph{Radiation realizability.}
+If the code produces NaNs, negative \var{erad}, negative \var{nrad}, or $E^2 < F^2$ violations, the first places to inspect are:
+\begin{itemize}[leftmargin=1.8em]
+\item \routine{m1_enforce_realizability};
+\item \routine{m1_update_closure_ixD};
+\item the post-update repairs in \file{finite_volume.t} and \file{finite_difference.t};
+\item import routines that densitize radiation variables before the closure has repaired them.
+\end{itemize}
+
+\paragraph{Leptonic consistency.}
+For leptonic EOS runs, verify all of the following at once:
+\begin{itemize}[leftmargin=1.8em]
+\item build with \var{TABEOS};
+\item runtime \var{eos_type_input='leptonic'};
+\item both \var{baryon_table_name} and \var{leptonic_table_name} are set;
+\item \var{lep_use_muons=.true.} if muon transport is enabled;
+\item imported data carry \var{ymu} and the muonic radiation moments.
+\end{itemize}
+
+\paragraph{Species-count mismatch.}
+Five-spec logic is not a pure runtime switch.  The build must also be compiled with \var{-nspecies=5}.  Otherwise the source indices and imported state ordering do not match the compiled variable layout.
+
+\section{Utility Modules and Support Infrastructure}
+
+The generic module layer in \dir{BHAC/src/modules} is not physics-specific, but it is essential for understanding the implementation:
+\begin{itemize}[leftmargin=1.8em]
+\item \file{mod_rootfinding.t}: one-dimensional and multidimensional root solves used by con2prim, EOS inversion, M1 closure, and collisional sources;
+\item \file{mod_interpolate.t}: trilinear and quadrilinear interpolation used by the Weakhub gray path;
+\item \file{mod_lu.t} and \file{mod_lnsrch.t}: dense linear algebra and line search helpers;
+\item \file{mod_constants.t}: physical constants and unit conversions used across several physics modules;
+\item \file{mod_timing.t}: accumulated runtime timers;
+\item \file{mod_oneblock.t}: utilities for block-wise operations;
+\item \file{mod_ngmres.t}, \file{mod_odeint.t}, \file{mod_rtsafe2D.t}, and \file{mod_random.t}: reusable numerics.
+\end{itemize}
+
+\section{Summary}
+
+The active \bhac{} code in this workspace is best understood as a layered system:
+\begin{enumerate}[leftmargin=1.8em]
+\item a generic AMR and time-integration framework;
+\item a GRMHD physics layer that owns conservative and primitive hydrodynamic variables;
+\item a geometry and metric layer that provides curved-space operators and CFC/GW support;
+\item an EOS framework that now supports both 3D baryonic and 4D leptonic thermodynamics;
+\item an M1 transport layer that supports three-spec and five-spec radiation with Weakhub gray tables and a three-spec analytical alternative;
+\item a robust import, conversion, and detector infrastructure that makes the code usable for realistic BNS workflows and direct comparison with FIL data products.
+\end{enumerate}
+
+For development, the most important practical rule is to extend the code \emph{through the active interfaces}:
+\begin{itemize}[leftmargin=1.8em]
+\item the generic EOS pointers in \file{mod_eos.t};
+\item the variable registry in \file{mod_variables.t};
+\item the M1 startup and source dispatch in \file{mod_m1.t} and \file{mod_m1_eas.t};
+\item the import ordering in test \file{amrvacusr.t} files;
+\item the consistency guards in \file{amrio.t}.
+\end{itemize}
+
+This keeps new physics aligned with the actual compiled BHAC+ workflow instead of only working in isolated draft files.
+
+\end{document}

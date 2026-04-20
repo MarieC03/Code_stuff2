@@ -15,7 +15,7 @@
         !snapshotnext    = 1 !155                 !The next snapshot of restart
         !slicenext       = 1 !155 
         typefilelog     = 'special'        ! use special to provide all info in log file
-        nwauxio         = 42 !0 !42 !5 !2                ! how many io aux vars you have set in specialvar_output in amrvacusr.t
+        nwauxio         = 50 !0 !42 !5 !2                ! how many io aux vars you have set in specialvar_output in amrvacusr.t
         typeparIO       = 0
        !nocartesian   = .true.
 &end

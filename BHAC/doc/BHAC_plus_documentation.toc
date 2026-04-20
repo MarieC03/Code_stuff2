@@ -1,0 +1,72 @@
+\contentsline {section}{\numberline {1}Purpose, Scope, and Reading Strategy}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}What is meant by \textsc {BHAC+}{} here}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Conventions used throughout this manual}{3}{subsection.1.2}%
+\contentsline {section}{\numberline {2}Build System, Runtime Usage, and Configuration}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Work directory model and setup script}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Compile-time controls}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}Runtime namelists and user-facing parameters}{5}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}Important consistency rules}{6}{subsection.2.4}%
+\contentsline {section}{\numberline {3}Source Tree and Active Code Structure}{6}{section.3}%
+\contentsline {section}{\numberline {4}Global Control Flow}{7}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Program entry and startup}{7}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}The time integration loop}{7}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Advance and update splitting}{7}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Variable Layout, State Vectors, and Preprocessor Notation}{8}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Variable classes}{8}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Hydrodynamic and spacetime variables}{8}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Radiation variables}{9}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Internal M1 state conventions}{9}{subsection.5.4}%
+\contentsline {section}{\numberline {6}Geometry, Coordinates, and Metric Infrastructure}{9}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Physics and numerical role}{9}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Core geometry routines in geometry.t}{9}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Metric interface in mod\_metric.t}{10}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}CFC metric solver}{10}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}GW backreaction}{11}{subsection.6.5}%
+\contentsline {section}{\numberline {7}EOS Framework}{11}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Generic EOS interface in mod\_eos.t}{11}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Atmosphere model}{12}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Tabulated EOS in mod\_eos\_tabulated.t}{12}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}Leptonic 4D EOS in mod\_eos\_leptonic.t}{13}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}Why the generic EOS helpers matter}{14}{subsection.7.5}%
+\contentsline {section}{\numberline {8}GRMHD Physics Layer}{15}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Conserved and primitive variables}{15}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Interface routines in amrvacphys.t}{15}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Primitive recovery in mod\_imhd\_con2prim.t}{16}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}Intermediate variables in mod\_imhd\_intermediate.t}{16}{subsection.8.4}%
+\contentsline {subsection}{\numberline {8.5}Auxiliary GRMHD diagnostics in mod\_physaux.t}{17}{subsection.8.5}%
+\contentsline {section}{\numberline {9}M1 Radiation Transport}{17}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Physical model}{17}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}Species bookkeeping and startup}{18}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}Transport routines in mod\_m1.t}{18}{subsection.9.3}%
+\contentsline {subsection}{\numberline {9.4}Closure and realizability in mod\_m1\_closure.t}{19}{subsection.9.4}%
+\contentsline {subsection}{\numberline {9.5}Implicit collisional source solve in mod\_m1\_collisional.t}{19}{subsection.9.5}%
+\contentsline {subsection}{\numberline {9.6}Rates and emissivity-absorption-scattering infrastructure in mod\_m1\_eas.t}{20}{subsection.9.6}%
+\contentsline {subsection}{\numberline {9.7}Weakhub gray tables}{21}{subsection.9.7}%
+\contentsline {subsection}{\numberline {9.8}Analytical rates}{21}{subsection.9.8}%
+\contentsline {subsection}{\numberline {9.9}Backreaction, beta equilibrium, diagnostics, and optical depth}{21}{subsection.9.9}%
+\contentsline {paragraph}{Backreaction.}{21}{section*.2}%
+\contentsline {paragraph}{Beta equilibrium.}{22}{section*.3}%
+\contentsline {paragraph}{Diagnostics.}{22}{section*.4}%
+\contentsline {paragraph}{Optical depth.}{22}{section*.5}%
+\contentsline {section}{\numberline {10}I/O, Conversion, Import, and Healpix Detectors}{22}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Runtime I/O in amrio.t}{22}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Conversion and post-processing in convert.t}{23}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Analysis hooks}{23}{subsection.10.3}%
+\contentsline {subsection}{\numberline {10.4}External initial-data import}{23}{subsection.10.4}%
+\contentsline {paragraph}{\texttt {mod\_c2b.t}.}{23}{section*.6}%
+\contentsline {paragraph}{\texttt {mod\_xns.t}.}{23}{section*.7}%
+\contentsline {paragraph}{\texttt {mod\_c2b\_cart3d.t}.}{23}{section*.8}%
+\contentsline {subsection}{\numberline {10.5}Healpix outflow detectors}{24}{subsection.10.5}%
+\contentsline {section}{\numberline {11}Tests, Example Workflows, and Practical Use}{24}{section.11}%
+\contentsline {subsection}{\numberline {11.1}BNS test setups}{24}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}What the muonic test is demonstrating}{25}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}Why imported variable ordering matters}{25}{subsection.11.3}%
+\contentsline {section}{\numberline {12}Extension Guide and Common Pitfalls}{25}{section.12}%
+\contentsline {subsection}{\numberline {12.1}Adding a new EOS or modifying an existing one}{25}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}Adding new radiation species or rate models}{25}{subsection.12.2}%
+\contentsline {subsection}{\numberline {12.3}Common failure modes}{26}{subsection.12.3}%
+\contentsline {paragraph}{Radiation realizability.}{26}{section*.9}%
+\contentsline {paragraph}{Leptonic consistency.}{26}{section*.10}%
+\contentsline {paragraph}{Species-count mismatch.}{26}{section*.11}%
+\contentsline {section}{\numberline {13}Utility Modules and Support Infrastructure}{26}{section.13}%
+\contentsline {section}{\numberline {14}Summary}{26}{section.14}%

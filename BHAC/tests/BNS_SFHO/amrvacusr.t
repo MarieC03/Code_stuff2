@@ -736,19 +736,9 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
             if (mirror_zplane .and. x(ix^D, 3)<0.d0) then
                 w(ix^D, u3_) = -w(ix^D, u3_)
                 w(ix^D, beta_metric3_) = -w(ix^D, beta_metric3_)
-                !if(init_m1_vars)then
-                !    {^KSP&
-                !    if(Nspecies .ge. 1) then
-                !    w(ix^D, frad^KSP3_) = - w(ix^D, frad^KSP3_)
-                !    end if 
-                !    if(Nspecies .ge. 2) then
-                !    w(ix^D, frad^KSP3_) = - w(ix^D, frad^KSP3_)
-                !    end if 
-                !    if(Nspecies .ge. 3) then
-                !    w(ix^D, frad^KSP3_) = - w(ix^D, frad^KSP3_)
-                !    end if 
-                !    \}
-                !end if
+                if(init_m1_vars) then
+                    {^KSP& w(ix^D, frad^KSP3_) = -w(ix^D, frad^KSP3_) \}
+                end if
             endif
         {end do^D& \}
 
@@ -777,17 +767,21 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
               {^C& stateM1%F_low(^C) = w(ix^D, frad^KSP^C_ ) \} 
               {^C& stateM1%vel(^C)   = w(ix^D, u0_ + ^C ) \}         
 	          call m1_update_closure_ixD(stateM1,metricM1,ix^D,.true.,get_vel_impl=.true.)
+              w(ix^D, erad^KSP_) = max(stateM1%E, m1_E_atmo)
+              {^C& w(ix^D, frad^KSP^C_) = stateM1%F_low(^C) \}
               Gamma_M1(ix^D) = stateM1%Gamma
            {end do^D& \}
 
  
 
            ! These are the gauge independent quantities and not the conserved 
+              w(ixO^S, nrad^KSP_ ) = max(w(ixO^S, nrad^KSP_ ), m1_N_atmo)
               w(ixO^S, erad^KSP_ ) = w(ixO^S, erad^KSP_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, nrad^KSP_ ) = w(ixO^S, nrad^KSP_ ) * Gamma_M1(ixO^S) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, frad^KSP1_ ) = w(ixO^S, frad^KSP1_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, frad^KSP2_ ) = w(ixO^S, frad^KSP2_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
               w(ixO^S, frad^KSP3_ ) = w(ixO^S, frad^KSP3_ ) * metricM1%sqrtg(ixO^S) * metricM1%sqrtg(ixO^S)
+              call m1_enforce_realizability(metricM1,w,ixI^L,ixO^L,^KSP)
 
            ! where ((w(ixO^S, erad^KSP_) < m1_E_atmo * (1.0d0 +1.0d-2)) .or. (w(ixO^S, nrad^KSP_) < m1_E_atmo * (1.0d0 +1.0d-2)))
            !     w(ixO^S, erad^KSP_ ) = m1_E_atmo

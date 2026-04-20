@@ -50,7 +50,7 @@ contains
     stateEQ%fluid_prim_Ye = fluid_Prim(idx_ye)
     stateEQ%fluid_prim_T = fluid_Prim(idx_T)
     stateEQ%fluid_prim_ymu = eos_ymumin
-    if (m1_i_mu > 0) stateEQ%fluid_prim_ymu = fluid_Prim(idx_ymu)
+    if (eos_has_ymu()) stateEQ%fluid_prim_ymu = fluid_Prim(idx_ymu)
 
     rho_fluid = stateEQ%fluid_prim_rho
     Ye_fluid = stateEQ%fluid_prim_Ye
@@ -78,16 +78,16 @@ contains
     stateEQ%J_nu_x = 0.0d0
     stateEQ%J_nu_mu = 0.0d0
     stateEQ%J_nu_mubar = 0.0d0
-    if (m1_i_nue > 0) stateEQ%J_nu_e = Jrad_closure(m1_i_nue)
-    if (m1_i_nuebar > 0) stateEQ%J_nu_ebar = Jrad_closure(m1_i_nuebar)
-    if (m1_i_nux > 0) stateEQ%J_nu_x = Jrad_closure(m1_i_nux)
-    if (m1_i_mu > 0) stateEQ%J_nu_mu = Jrad_closure(m1_i_mu)
-    if (m1_i_mubar > 0) stateEQ%J_nu_mubar = Jrad_closure(m1_i_mubar)
+    if (size(Jrad_closure) >= m1_i_nue) stateEQ%J_nu_e = Jrad_closure(m1_i_nue)
+    if (size(Jrad_closure) >= m1_i_nuebar) stateEQ%J_nu_ebar = Jrad_closure(m1_i_nuebar)
+    if (size(Jrad_closure) >= m1_i_nux) stateEQ%J_nu_x = Jrad_closure(m1_i_nux)
+    if (size(Jrad_closure) >= m1_i_mu) stateEQ%J_nu_mu = Jrad_closure(m1_i_mu)
+    if (size(Jrad_closure) >= m1_i_mubar) stateEQ%J_nu_mubar = Jrad_closure(m1_i_mubar)
 
     stateEQ%N_KSP1 = 0.0d0
     stateEQ%N_KSP2 = 0.0d0
-    if (m1_i_nue > 0) stateEQ%N_KSP1 = N_KSP(m1_i_nue)
-    if (m1_i_nuebar > 0) stateEQ%N_KSP2 = N_KSP(m1_i_nuebar)
+    if (size(N_KSP) >= m1_i_nue) stateEQ%N_KSP1 = N_KSP(m1_i_nue)
+    if (size(N_KSP) >= m1_i_nuebar) stateEQ%N_KSP2 = N_KSP(m1_i_nuebar)
 
     !> first guess:
     z_vec(1) = stateEQ%fluid_prim_Ye !Ye_eq
@@ -203,11 +203,11 @@ contains
     stateEQ%eta_nu_x = 0.0d0
     stateEQ%eta_nu_mu = 0.0d0
     stateEQ%eta_nu_mubar = 0.0d0
-    if (m1_i_nue > 0) stateEQ%eta_nu_e = eta_nu(m1_i_nue)
-    if (m1_i_nuebar > 0) stateEQ%eta_nu_ebar = eta_nu(m1_i_nuebar)
-    if (m1_i_nux > 0) stateEQ%eta_nu_x = eta_nu(m1_i_nux)
-    if (m1_i_mu > 0) stateEQ%eta_nu_mu = eta_nu(m1_i_mu)
-    if (m1_i_mubar > 0) stateEQ%eta_nu_mubar = eta_nu(m1_i_mubar)
+    if (size(eta_nu) >= m1_i_nue) stateEQ%eta_nu_e = eta_nu(m1_i_nue)
+    if (size(eta_nu) >= m1_i_nuebar) stateEQ%eta_nu_ebar = eta_nu(m1_i_nuebar)
+    if (size(eta_nu) >= m1_i_nux) stateEQ%eta_nu_x = eta_nu(m1_i_nux)
+    if (size(eta_nu) >= m1_i_mu) stateEQ%eta_nu_mu = eta_nu(m1_i_mu)
+    if (size(eta_nu) >= m1_i_mubar) stateEQ%eta_nu_mubar = eta_nu(m1_i_mubar)
 
     ! ====================================================================
     ! CRITICAL: Convert density from geometrized units to CGS
@@ -229,12 +229,12 @@ contains
     Y_nu = 4.0d0 * Pi_const / (hc_const**3) * mb_msun / stateEQ%fluid_prim_rho * &
            (Tequil)**3 * exp(-rho0 / rho_cgs)
     
-    if(m1_i_nue > 0) then
+    if(size(eta_nu) >= m1_i_nue) then
       Y_nue = Y_nu * fermi_dirac(stateEQ%eta_nu_e, 2)
     else
       Y_nue = 0.0d0
     end if
-    if(m1_i_nuebar > 0) then
+    if(size(eta_nu) >= m1_i_nuebar) then
       Y_nue_bar = Y_nu * fermi_dirac(stateEQ%eta_nu_ebar, 2)
     else 
       Y_nue_bar = 0.0d0
@@ -270,27 +270,27 @@ contains
     !       (Tequil)**4 * exp(-rho0 / rho_cgs)
     Z_nu = 4.0d0 * Pi_const / (hc_const**3) * (Tequil)**4 * exp(-rho0 / rho_cgs)*MEV_TO_ERG_KEN * EPSGF * RHOGF 
     
-    if(m1_i_nue > 0) then
+    if(size(eta_nu) >= m1_i_nue) then
       Z_nue = Z_nu * fermi_dirac(stateEQ%eta_nu_e, 3)
     else
       Z_nue = 0.0d0
     end if
-    if(m1_i_nuebar > 0) then
+    if(size(eta_nu) >= m1_i_nuebar) then
       Z_nue_bar = Z_nu * fermi_dirac(stateEQ%eta_nu_ebar, 3)
     else
       Z_nue_bar = 0.0d0
     end if 
-    if(m1_i_nux > 0) then
+    if(size(eta_nu) >= m1_i_nux) then
       Z_nux = Z_nu * fermi_dirac(stateEQ%eta_nu_x, 3)
     else
       Z_nux = 0.0d0
     end if
-    if(m1_i_mu > 0) then
+    if(size(eta_nu) >= m1_i_mu) then
       Z_numu = Z_nu * fermi_dirac(stateEQ%eta_nu_mu, 3)
     else
       Z_numu = 0.0d0
     end if
-    if(m1_i_mubar > 0) then
+    if(size(eta_nu) >= m1_i_mubar) then
       Z_numubar = Z_nu * fermi_dirac(stateEQ%eta_nu_mubar, 3)
     else
       Z_numubar = 0.0d0
@@ -299,7 +299,7 @@ contains
     ! Residual 2: Energy conservation
     ! Note: ρ/m_b = n_b (baryon number density in CGS)
     !m1_beta_equilib_function(2) = -u + e + rho_cgs/mb * (Z_nue + Z_nue_bar + 4.0d0*Z_nux)
-    if ((m1_i_mu > 0) .or. (m1_i_mubar > 0)) then
+    if ((size(eta_nu) >= m1_i_mu) .or. (size(eta_nu) >= m1_i_mubar)) then
       m1_beta_equilib_function(2) = -u + e + (Z_nue + Z_nue_bar + Z_numu + Z_numubar + 2.0d0*Z_nux)
     else
       m1_beta_equilib_function(2) = -u + e + (Z_nue + Z_nue_bar + 4.0d0*Z_nux)
