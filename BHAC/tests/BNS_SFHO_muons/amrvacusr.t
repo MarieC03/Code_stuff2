@@ -22,13 +22,13 @@ module Init_c2b_cart_3d_interface
         type(carpet_variable)                         :: rho
         type(carpet_variable)                         :: velox, veloy, veloz
         type(carpet_variable)                         :: alpha, psi, betax, betay, betaz
-        type(carpet_variable)                         :: temp, ye, eps, pressure
+        type(carpet_variable)                         :: temp, ye, ymu, eps, pressure
         type(carpet_variable)                         :: Ax, Ay, Az, Bx, By, Bz
-        type(carpet_variable)                         :: Enue, Enue_bar, Enux
-        type(carpet_variable)                         :: Nnue, Nnue_bar, Nnux
-        type(carpet_variable)                         :: Fnue_x, Fnue_bar_x, Fnux_x
-        type(carpet_variable)                         :: Fnue_y, Fnue_bar_y, Fnux_y
-        type(carpet_variable)                         :: Fnue_z, Fnue_bar_z, Fnux_z
+        type(carpet_variable)                         :: Enue, Enue_bar, Enux, Enumu, Enumu_bar
+        type(carpet_variable)                         :: Nnue, Nnue_bar, Nnux, Nnumu, Nnumu_bar
+        type(carpet_variable)                         :: Fnue_x, Fnue_bar_x, Fnux_x, Fnumu_x, Fnumu_bar_x
+        type(carpet_variable)                         :: Fnue_y, Fnue_bar_y, Fnux_y, Fnumu_y, Fnumu_bar_y
+        type(carpet_variable)                         :: Fnue_z, Fnue_bar_z, Fnux_z, Fnumu_z, Fnumu_bar_z
     end type c2b_3d_profile
 
     type(c2b_3d_profile)                              :: my_c2b_3d_profile
@@ -40,8 +40,8 @@ module Init_c2b_cart_3d_interface
             save_cpu_or_mem, init_magnetic_field, init_B_from_vecA, use_eps_init, init_m1_vars)
         use mod_eos
         character(len=256), intent(in)                :: fpath ! path to directory where hdf5 files are stored
-        character(len=256), dimension(34), intent(in) :: fnbase_list ! name of the file that store the variable
-        character(len=256), dimension(34), intent(in) :: dsname_list ! name of the variable in the attribute
+        character(len=256), dimension(45), intent(in) :: fnbase_list ! name of the file that store the variable
+        character(len=256), dimension(45), intent(in) :: dsname_list ! name of the variable in the attribute
 
         !character(len=256), dimension(29), intent(in) :: fnbase_list ! name of the file that store the variable
         !character(len=256), dimension(29), intent(in) :: dsname_list ! name of the variable in the attribute
@@ -63,32 +63,45 @@ module Init_c2b_cart_3d_interface
         integer, parameter                            :: FIL_betaz     = 9
         integer, parameter                            :: FIL_temp      = 10
         integer, parameter                            :: FIL_ye        = 11
-        integer, parameter                            :: FIL_eps       = 12
-        integer, parameter                            :: FIL_pressure  = 13
-        integer, parameter                            :: FIL_Ax        = 14
-        integer, parameter                            :: FIL_Ay        = 15
-        integer, parameter                            :: FIL_Az        = 16
-        integer, parameter                            :: FIL_Bx        = 17
-        integer, parameter                            :: FIL_By        = 18
-        integer, parameter                            :: FIL_Bz        = 19
+        integer, parameter                            :: FIL_ymu       = 12
+        integer, parameter                            :: FIL_eps       = 13
+        integer, parameter                            :: FIL_pressure  = 14
+        integer, parameter                            :: FIL_Ax        = 15
+        integer, parameter                            :: FIL_Ay        = 16
+        integer, parameter                            :: FIL_Az        = 17
+        integer, parameter                            :: FIL_Bx        = 18
+        integer, parameter                            :: FIL_By        = 19
+        integer, parameter                            :: FIL_Bz        = 20
 
-        integer, parameter                            :: FIL_Nnue      = 20
-        integer, parameter                            :: FIL_Enue      = 21
-        integer, parameter                            :: FIL_Fnue_x    = 22
-        integer, parameter                            :: FIL_Fnue_y    = 23
-        integer, parameter                            :: FIL_Fnue_z    = 24
+        integer, parameter                            :: FIL_Nnue      = 21
+        integer, parameter                            :: FIL_Enue      = 22
+        integer, parameter                            :: FIL_Fnue_x    = 23
+        integer, parameter                            :: FIL_Fnue_y    = 24
+        integer, parameter                            :: FIL_Fnue_z    = 25
 
-        integer, parameter                            :: FIL_Nnue_bar  = 25
-        integer, parameter                            :: FIL_Enue_bar  = 26
-        integer, parameter                            :: FIL_Fnue_bar_x = 27
-        integer, parameter                            :: FIL_Fnue_bar_y = 28
-        integer, parameter                            :: FIL_Fnue_bar_z = 29
+        integer, parameter                            :: FIL_Nnue_bar  = 26
+        integer, parameter                            :: FIL_Enue_bar  = 27
+        integer, parameter                            :: FIL_Fnue_bar_x = 28
+        integer, parameter                            :: FIL_Fnue_bar_y = 29
+        integer, parameter                            :: FIL_Fnue_bar_z = 30
         
-        integer, parameter                            :: FIL_Nnux      = 30
-        integer, parameter                            :: FIL_Enux      = 31
-        integer, parameter                            :: FIL_Fnux_x    = 32
-        integer, parameter                            :: FIL_Fnux_y    = 33
-        integer, parameter                            :: FIL_Fnux_z    = 34
+        integer, parameter                            :: FIL_Nnux      = 31
+        integer, parameter                            :: FIL_Enux      = 32
+        integer, parameter                            :: FIL_Fnux_x    = 33
+        integer, parameter                            :: FIL_Fnux_y    = 34
+        integer, parameter                            :: FIL_Fnux_z    = 35
+        
+        integer, parameter                            :: FIL_Nnumu     = 36
+        integer, parameter                            :: FIL_Enumu     = 37
+        integer, parameter                            :: FIL_Fnumu_x   = 38
+        integer, parameter                            :: FIL_Fnumu_y   = 39
+        integer, parameter                            :: FIL_Fnumu_z   = 40
+        
+        integer, parameter                            :: FIL_Nnumu_bar  = 41
+        integer, parameter                            :: FIL_Enumu_bar  = 42
+        integer, parameter                            :: FIL_Fnumu_bar_x = 43
+        integer, parameter                            :: FIL_Fnumu_bar_y = 44
+        integer, parameter                            :: FIL_Fnumu_bar_z = 45
 
         integer :: Nspecies
 
@@ -131,9 +144,13 @@ module Init_c2b_cart_3d_interface
             endif
         end if
 
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
             call init_single_variable(my_c2b_3d_profile%ye, fpath, fnbase_list(FIL_ye), dsname_list(FIL_ye), &
                 num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+            if (eos_has_ymu()) then
+                call init_single_variable(my_c2b_3d_profile%ymu, fpath, fnbase_list(FIL_ymu), dsname_list(FIL_ymu), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+            endif
             if (use_eps_init) then
                 call init_single_variable(my_c2b_3d_profile%eps, fpath, fnbase_list(FIL_eps), dsname_list(FIL_eps), &
                     num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
@@ -196,6 +213,30 @@ module Init_c2b_cart_3d_interface
                 call init_single_variable(my_c2b_3d_profile%Fnux_z, fpath, fnbase_list(FIL_Fnux_z), dsname_list(FIL_Fnux_z), &
                     num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
             end if 
+            if(Nspecies .ge. 4) then
+                call init_single_variable(my_c2b_3d_profile%Nnumu, fpath, fnbase_list(FIL_Nnumu), dsname_list(FIL_Nnumu), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Enumu, fpath, fnbase_list(FIL_Enumu), dsname_list(FIL_Enumu), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Fnumu_x, fpath, fnbase_list(FIL_Fnumu_x), dsname_list(FIL_Fnumu_x), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Fnumu_y, fpath, fnbase_list(FIL_Fnumu_y), dsname_list(FIL_Fnumu_y), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Fnumu_z, fpath, fnbase_list(FIL_Fnumu_z), dsname_list(FIL_Fnumu_z), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+            end if
+            if(Nspecies .ge. 5) then
+                call init_single_variable(my_c2b_3d_profile%Nnumu_bar, fpath, fnbase_list(FIL_Nnumu_bar), dsname_list(FIL_Nnumu_bar), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Enumu_bar, fpath, fnbase_list(FIL_Enumu_bar), dsname_list(FIL_Enumu_bar), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Fnumu_bar_x, fpath, fnbase_list(FIL_Fnumu_bar_x), dsname_list(FIL_Fnumu_bar_x), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Fnumu_bar_y, fpath, fnbase_list(FIL_Fnumu_bar_y), dsname_list(FIL_Fnumu_bar_y), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+                call init_single_variable(my_c2b_3d_profile%Fnumu_bar_z, fpath, fnbase_list(FIL_Fnumu_bar_z), dsname_list(FIL_Fnumu_bar_z), &
+                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
+            end if
         end if 
 
 
@@ -231,6 +272,7 @@ module Init_c2b_cart_3d_interface
         include 'amrvacdef.f'
         integer :: Nspecies
         if (mype==0) write(*, *) "Destroying c2b_3d_profile"
+        Nspecies = ^NS
         call destroy_single_variable(my_c2b_3d_profile%rho)
         call destroy_single_variable(my_c2b_3d_profile%velox)
         call destroy_single_variable(my_c2b_3d_profile%veloy)
@@ -242,6 +284,7 @@ module Init_c2b_cart_3d_interface
         call destroy_single_variable(my_c2b_3d_profile%betaz)
         call destroy_single_variable(my_c2b_3d_profile%temp)
         call destroy_single_variable(my_c2b_3d_profile%ye)
+        call destroy_single_variable(my_c2b_3d_profile%ymu)
         call destroy_single_variable(my_c2b_3d_profile%eps)
         call destroy_single_variable(my_c2b_3d_profile%pressure)
         call destroy_single_variable(my_c2b_3d_profile%Ax)
@@ -270,6 +313,20 @@ module Init_c2b_cart_3d_interface
         call destroy_single_variable(my_c2b_3d_profile%Fnux_x)
         call destroy_single_variable(my_c2b_3d_profile%Fnux_y)
         call destroy_single_variable(my_c2b_3d_profile%Fnux_z)
+        end if 
+        if(Nspecies .ge. 4) then
+        call destroy_single_variable(my_c2b_3d_profile%Nnumu)
+        call destroy_single_variable(my_c2b_3d_profile%Enumu)
+        call destroy_single_variable(my_c2b_3d_profile%Fnumu_x)
+        call destroy_single_variable(my_c2b_3d_profile%Fnumu_y)
+        call destroy_single_variable(my_c2b_3d_profile%Fnumu_z)
+        end if 
+        if(Nspecies .ge. 5) then
+        call destroy_single_variable(my_c2b_3d_profile%Nnumu_bar)
+        call destroy_single_variable(my_c2b_3d_profile%Enumu_bar)
+        call destroy_single_variable(my_c2b_3d_profile%Fnumu_bar_x)
+        call destroy_single_variable(my_c2b_3d_profile%Fnumu_bar_y)
+        call destroy_single_variable(my_c2b_3d_profile%Fnumu_bar_z)
         end if 
 
     end subroutine destroy_c2b_3d_profile
@@ -370,22 +427,26 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
    !     "Ax", "Ay", "Az", "Bvec[0]", "Bvec[1]", "Bvec[2]","Nnue","Enue","Fnue_x","Fnue_y","Fnue_z", &
    !     "Nnue_bar","Enue_bar","Fnue_bar_x","Fnue_bar_y","Fnue_bar_z"]
    !************************
-   !! setup for M1 3 species:
+    !! setup for M1 5 species:
    !************************
    ! list of strings that contain the name of the saved variables, like 'HYDROBASE::rho', "HYDROBASE::vel[1]", and so on
-    character(len=256), dimension(34) :: variable_name_list =  [ character(len=256):: "ILLINOISGRMHD::rho_b", "HYDROBASE::vel[0]", &
+    character(len=256), dimension(45) :: variable_name_list =  [ character(len=256):: "ILLINOISGRMHD::rho_b", "HYDROBASE::vel[0]", &
         "HYDROBASE::vel[1]", "HYDROBASE::vel[2]", "ANTELOPE::psi_z4c", "ADMBASE::alp", "ADMBASE::betax", "ADMBASE::betay", "ADMBASE::betaz", &
-        "ILLINOISGRMHD::temp", "ILLINOISGRMHD::ye", "HYDROBASE::eps", "HYDROBASE::press", &
+        "ILLINOISGRMHD::temp", "ILLINOISGRMHD::ye", "ILLINOISGRMHD::ymu", "HYDROBASE::eps", "HYDROBASE::press", &
         "ILLINOISGRMHD::Ax", "ILLINOISGRMHD::Ay", "ILLINOISGRMHD::Az", "ILLINOISGRMHD::Bx", "ILLINOISGRMHD::By", "ILLINOISGRMHD::Bz", &
         "FRANKFURT_M1::Nnue","FRANKFURT_M1::Enue","FRANKFURT_M1::Fnue_x", "FRANKFURT_M1::Fnue_y", "FRANKFURT_M1::Fnue_z", &
         "FRANKFURT_M1::Nnue_bar","FRANKFURT_M1::Enue_bar","FRANKFURT_M1::Fnue_bar_x","FRANKFURT_M1::Fnue_bar_y","FRANKFURT_M1::Fnue_bar_z", &
-        "FRANKFURT_M1::Nnux","FRANKFURT_M1::Enux", "FRANKFURT_M1::Fnux_x", "FRANKFURT_M1::Fnux_y", "FRANKFURT_M1::Fnux_z"]
+        "FRANKFURT_M1::Nnux","FRANKFURT_M1::Enux", "FRANKFURT_M1::Fnux_x", "FRANKFURT_M1::Fnux_y", "FRANKFURT_M1::Fnux_z", &
+        "FRANKFURT_M1::Nnumu","FRANKFURT_M1::Enumu", "FRANKFURT_M1::Fnumu_x", "FRANKFURT_M1::Fnumu_y", "FRANKFURT_M1::Fnumu_z", &
+        "FRANKFURT_M1::Nnumu_bar","FRANKFURT_M1::Enumu_bar", "FRANKFURT_M1::Fnumu_bar_x", "FRANKFURT_M1::Fnumu_bar_y", "FRANKFURT_M1::Fnumu_bar_z"]
         ! list of strings that contain the name of the file where the cooresponding variable are saved, like 'rho', 'vel[1]', and so on
-    character(len=256), dimension(34) :: variable_fname_list = [ character(len=256):: "rho_b", "vel[0]", &
-        "vel[1]", "vel[2]", "psi_z4c", "alp", "betax", "betay", "betaz", "temp", 'ye', 'eps', 'press', &
+    character(len=256), dimension(45) :: variable_fname_list = [ character(len=256):: "rho_b", "vel[0]", &
+        "vel[1]", "vel[2]", "psi_z4c", "alp", "betax", "betay", "betaz", "temp", 'ye', 'ymu', 'eps', 'press', &
         "Ax", "Ay", "Az", "Bx", "By", "Bz","Nnue","Enue","Fnue_x","Fnue_y","Fnue_z", &
         "Nnue_bar","Enue_bar","Fnue_bar_x","Fnue_bar_y","Fnue_bar_z",&
-        "Nnux", "Enux", "Fnux_x","Fnux_y","Fnux_z"] !KEN changed temp
+        "Nnux", "Enux", "Fnux_x","Fnux_y","Fnux_z", &
+        "Nnumu", "Enumu", "Fnumu_x","Fnumu_y","Fnumu_z", &
+        "Nnumu_bar", "Enumu_bar", "Fnumu_bar_x","Fnumu_bar_y","Fnumu_bar_z"] !KEN changed temp
 
     integer                           :: num_ref_levels = 8           ! number of refinement levels, to check this, you can use h5ls to check how many refinement levels are there
     integer                           :: num_data_blocks = 40 !80!16!96!80        ! number of blocks that the data have been separated into
@@ -421,7 +482,7 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
         !-----------------------------------------------------------------------------
         patchw(ixO^S) = .false.
 
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           where(w(ixO^S,rho_) .lt. small_rho_thr)
             w(ixO^S,rho_)    = small_rho
             w(ixO^S,u1_)     = 0.0d0
@@ -431,6 +492,15 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
             w(ixO^S,T_eps_)  = small_temp
             patchw(ixO^S)    = .true.
           end where
+          if (eos_has_ymu()) then
+            where(patchw(ixO^S))
+              w(ixO^S,ymu_) = eos_ymumin
+            end where
+          else
+            where(patchw(ixO^S))
+              w(ixO^S,ymu_) = 0.0d0
+            end where
+          endif
         else
           where(w(ixO^S,rho_) .lt. small_rho_thr)
             w(ixO^S,rho_)    = small_rho
@@ -479,10 +549,15 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
             call mod_c2b_map_2D(w(ix^D,rho_),rad,theta,c2b_prof%rho(:,:), &
                                 c2b_prof%radius, c2b_prof%theta, c2b_prof%Nr, c2b_prof%Nth)
             w(ix^D, rho_) = max(eos_rhomin, min(w(ix^D, rho_), eos_rhomax))
-            call mod_c2b_map_2D(w(ix^D,ye_),rad,theta,c2b_prof%ye(:,:), &
-                                c2b_prof%radius, c2b_prof%theta, c2b_prof%Nr, c2b_prof%Nth)
-            if (eos_type == tabulated) then
+            if (eos_uses_ye()) then
+              call mod_c2b_map_2D(w(ix^D,ye_),rad,theta,c2b_prof%ye(:,:), &
+                                  c2b_prof%radius, c2b_prof%theta, c2b_prof%Nr, c2b_prof%Nth)
               w(ix^D, ye_) = max(eos_yemin, min(w(ix^D, ye_), eos_yemax))
+              if (eos_has_ymu()) then
+                w(ix^D, ymu_) = eos_ymumin
+              else
+                w(ix^D, ymu_) = 0.0d0
+              endif
               call mod_c2b_map_2D(w(ix^D,T_eps_),rad,theta,c2b_prof%temp(:,:), &
                                   c2b_prof%radius, c2b_prof%theta, c2b_prof%Nr, c2b_prof%Nth)
             endif
@@ -513,6 +588,7 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
         double precision :: rad, theta, rad_xy, sin_phi, cos_phi, sin_theta, shifted_x, shifted_y
         double precision :: vphi(ixI^S), betaphi(ixI^S), v(ixI^S,1:ndir), gamma(ixI^S,1:3,1:3), lfac(ixI^S), prs_tmp(ixI^S)
         if (shift_origin .ne. 0.0d0) call mpistop('shift origin must be zero')
+        if (eos_uses_ye()) call mpistop('read_NS_XNS_cart requires an EOS without Ye/Ymu dependence')
   
         {do ix^D=ixOmin^D, ixOmax^D \}
             
@@ -663,11 +739,20 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
             call interp_cart3d_carpet_variable_one_point(w(ix^D, beta_metric1_), x1, x2, x3, my_c2b_3d_profile%betax, interp_metric, 0.0d0)
             call interp_cart3d_carpet_variable_one_point(w(ix^D, beta_metric2_), x1, x2, x3, my_c2b_3d_profile%betay, interp_metric, 0.0d0)
             call interp_cart3d_carpet_variable_one_point(w(ix^D, beta_metric3_), x1, x2, x3, my_c2b_3d_profile%betaz, interp_metric, 0.0d0)
-            if (eos_type == tabulated) then ! tabulated eos
+            if (eos_uses_ye()) then
                 call interp_cart3d_carpet_variable_one_point(w(ix^D, ye_), x1, x2, x3, my_c2b_3d_profile%ye, interp_fluid, eos_yemin+10*tiny(1.0d0))
+                if (eos_has_ymu()) then
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, ymu_), x1, x2, x3, my_c2b_3d_profile%ymu, interp_fluid, eos_ymumin)
+                else
+                    w(ix^D, ymu_) = 0.0d0
+                endif
                 if (use_eps_init) then
                     call interp_cart3d_carpet_variable_one_point(eps_tmp(ix^D), x1, x2, x3, my_c2b_3d_profile%eps, interp_fluid, eos_epsmin+10*tiny(1.0d0))
-                    call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), w(ix^D, ye_))
+                    if (eos_has_ymu()) then
+                        call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), w(ix^D, ye_), ymu=w(ix^D, ymu_))
+                    else
+                        call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), w(ix^D, ye_))
+                    endif
                 else
                     call interp_cart3d_carpet_variable_one_point(w(ix^D, T_eps_), x1, x2, x3, my_c2b_3d_profile%temp, interp_fluid, eos_tempmin+10*tiny(1.0d0))
                 endif
@@ -704,6 +789,20 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
                     call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP1_), x1, x2, x3, my_c2b_3d_profile%Fnux_x, interp_m1, 0.0d0)
                     call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP2_), x1, x2, x3, my_c2b_3d_profile%Fnux_y, interp_m1, 0.0d0)
                     call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP3_), x1, x2, x3, my_c2b_3d_profile%Fnux_z, interp_m1, 0.0d0)
+                end if 
+                if(^KSP .eq. 4) then
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, erad^KSP_), x1, x2, x3, my_c2b_3d_profile%Enumu, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, nrad^KSP_), x1, x2, x3, my_c2b_3d_profile%Nnumu, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP1_), x1, x2, x3, my_c2b_3d_profile%Fnumu_x, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP2_), x1, x2, x3, my_c2b_3d_profile%Fnumu_y, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP3_), x1, x2, x3, my_c2b_3d_profile%Fnumu_z, interp_m1, 0.0d0)
+                end if 
+                if(^KSP .eq. 5) then
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, erad^KSP_), x1, x2, x3, my_c2b_3d_profile%Enumu_bar, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, nrad^KSP_), x1, x2, x3, my_c2b_3d_profile%Nnumu_bar, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP1_), x1, x2, x3, my_c2b_3d_profile%Fnumu_bar_x, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP2_), x1, x2, x3, my_c2b_3d_profile%Fnumu_bar_y, interp_m1, 0.0d0)
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, frad^KSP3_), x1, x2, x3, my_c2b_3d_profile%Fnumu_bar_z, interp_m1, 0.0d0)
                 end if 
                 \}
             end if 
@@ -951,6 +1050,7 @@ subroutine initonegrid_usr(ixI^L, ixO^L, s)
             w(ixI^S, rho_) = small_rho !1.000000000000000E-010 !1.000000000000000E-004 !0.0d0
             w(ixI^S, T_eps_) = small_temp !1.0d0 !10.0d0
             w(ixI^S, ye_) = big_ye !0.4d0 !1.000000000000000E-001
+            if (eos_has_ymu()) w(ixI^S, ymu_) = eos_ymumin
             !w(ixI^S, press_) = 0.0d0
         end select
 
@@ -1097,6 +1197,7 @@ subroutine initonegrid_usr2(ixI^L, ixO^L, s)
             w(ixI^S, rho_) = small_rho !1.000000000000000E-010 !1.000000000000000E-004 !0.0d0
             w(ixI^S, T_eps_) = small_temp !1.0d0 !10.0d0
             w(ixI^S, ye_) = big_ye !0.4d0 !1.000000000000000E-001
+            if (eos_has_ymu()) w(ixI^S, ymu_) = eos_ymumin
             !w(ixI^S, press_) = 0.0d0
         end select
 
@@ -1793,7 +1894,7 @@ subroutine check_data_correctness(ixI^L, ixO^L, w, x)
   
     ! EOS check
     {do ix^D=ixOmin^D, ixOmax^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
             if (w(ix^D, ye_)  .lt. eos_yemin) then
                 write(*,*) w(ix^D, ye_), eos_yemin, 'ye'
                 call mpistop("ye < eosmin in check correctness")
@@ -1807,6 +1908,10 @@ subroutine check_data_correctness(ixI^L, ixO^L, w, x)
                 call mpistop('temp < eosmin in data check correctness')
             endif
             if (w(ix^D, ye_)   .gt. eos_yemax)   call mpistop ("ye > eosmax in check correctness"   ) 
+            if (eos_has_ymu()) then
+                if (w(ix^D, ymu_) .lt. eos_ymumin) call mpistop ("ymu < eosmin in check correctness")
+                if (w(ix^D, ymu_) .gt. eos_ymumax) call mpistop ("ymu > eosmax in check correctness")
+            endif
             if (w(ix^D, rho_)  .gt. eos_rhomax)  call mpistop ("rho > eosmax in check correctness"  )
             if (w(ix^D, T_eps_) .gt. eos_tempmax) call mpistop ("temp > eosmax in check correctness" )
         else
@@ -1919,7 +2024,7 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
    integer :: ispec
    
    double precision, dimension(ixI^S) :: eos_ent, eos_prs
-   double precision, dimension(ixI^S) :: eos_rho, eos_eps, eos_temp, eos_ye
+   double precision, dimension(ixI^S) :: eos_rho, eos_eps, eos_temp, eos_ye, eos_ymu
    !-----------------------------------------------------------------------------
    associate(x=>s%x%x{#IFDEF STAGGERED ,ws=>s%ws%w},wold=>sold%w%w)   
 
@@ -1997,7 +2102,8 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
        if (nwmax-nw .gt. 19) &
        w(ixI^S,nw+20) = lfact(ixI^S) 
        
-      {^C& FluxSum(ixI^S,^C) = w(ixI^S,frad1^C_) + w(ixI^S,frad2^C_) + w(ixI^S,frad3^C_) \} 
+      {^C& FluxSum(ixI^S,^C) = 0.0d0 \}
+      {^KSP& {^C& FluxSum(ixI^S,^C) = FluxSum(ixI^S,^C) + w(ixI^S,frad^KSP^C_) \} \}
 
      Lmom(ixI^S,1) = x(ixI^S,2) * FluxSum(ixI^S,3) - FluxSum(ixI^S,2) * x(ixI^S,3)
      Lmom(ixI^S,2) = - (x(ixI^S,1) * FluxSum(ixI^S,3) - FluxSum(ixI^S,1) * x(ixI^S,1)  )
@@ -2119,10 +2225,18 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
       eos_rho(ix^D) = w(ix^D, rho_)
       eos_temp(ix^D) = w(ix^D, T_eps_)
       eos_ye(ix^D)  = w(ix^D, ye_)
-      call eos_temp_get_all_one_grid(eos_rho(ix^D), eos_temp(ix^D), &
-           eos_ye(ix^D), eos_eps(ix^D),&
-            prs = eos_prs(ix^D), &
-            ent = eos_ent(ix^D))
+      if (eos_has_ymu()) then
+           eos_ymu(ix^D) = w(ix^D, ymu_)
+           call eos_temp_get_all_one_grid(eos_rho(ix^D), eos_temp(ix^D), &
+                eos_ye(ix^D), eos_eps(ix^D),&
+                 prs = eos_prs(ix^D), &
+                 ent = eos_ent(ix^D), ymu=eos_ymu(ix^D))
+      else
+           call eos_temp_get_all_one_grid(eos_rho(ix^D), eos_temp(ix^D), &
+                eos_ye(ix^D), eos_eps(ix^D),&
+                 prs = eos_prs(ix^D), &
+                 ent = eos_ent(ix^D))
+      endif
     {end do^D& \}
 
    if (nwmax-nw .gt. 40) &
@@ -2282,7 +2396,8 @@ subroutine printlog_special
     ! find extreme values
     rho_max_out = find_global_extreme(rho_, "MAX")
     T_eps_max_out = find_global_extreme(T_eps_, "MAX")
-    if (eos_type == tabulated) ye_min_out = find_global_extreme(ye_, "MIN")
+    ye_min_out = 0.0d0
+    if (eos_uses_ye()) ye_min_out = find_global_extreme(ye_, "MIN")
     alp_min_out = find_global_extreme(alp_metric_, "MIN")
     psi_max_out = find_global_extreme(psi_metric_, "MAX")
     {#IFDEF GW_BR
@@ -2352,11 +2467,16 @@ subroutine printlog_special
         dvolume(ixM^T, iigrid) = pgeo(igrid)%dvolume(ixM^T)*pw(igrid)%w(ixM^T,psi_metric_)**6
         call cal_adm_mass_volume_contribution(ixG^LL, ixM^LL, pw(igrid)%w, px(igrid)%x, adm_vol)
         adm_mass_local = adm_mass_local+sum(adm_vol(ixM^T)*dvolume(ixM^T, iigrid))
-        if (eos_type==tabulated) then
+        if (eos_uses_ye()) then
             {do ix^D = ixMlo^D, ixMhi^D \}
                 temp_local = pw(igrid)%w(ix^D, T_eps_)
                 rho_local = pw(igrid)%w(ix^D, rho_)
-                call eos_temp_get_all_one_grid(rho_local, temp_local, pw(igrid)%w(ix^D, ye_), E_internal(ix^D, iigrid))
+                if (eos_has_ymu()) then
+                    call eos_temp_get_all_one_grid(rho_local, temp_local, pw(igrid)%w(ix^D, ye_), E_internal(ix^D, iigrid), &
+                                                   ymu=pw(igrid)%w(ix^D, ymu_))
+                else
+                    call eos_temp_get_all_one_grid(rho_local, temp_local, pw(igrid)%w(ix^D, ye_), E_internal(ix^D, iigrid))
+                endif
             {enddo ^D&\}
         else
             E_internal(ixM^T, iigrid) = pw(igrid)%w(ixM^T, T_eps_)
@@ -3064,5 +3184,3 @@ subroutine usr_atmo_pt(ix^D, w_pt, x_pt)
    double precision, intent(inout)  :: w_pt(1:nw)
 
 end subroutine usr_atmo_pt
-
-

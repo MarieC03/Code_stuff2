@@ -2,7 +2,7 @@
 &filelist
        ! variables you have set in mod_variables --> follow the order that you set
         !primnames       = 'd dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 U_br alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met U_br1 U_br2 U_br3 R_br U5_br h_00'
-        primnames       = 'd dye s1 s2 s3 tau b1 b2 b3 nrad1 erad1 frad11 frad12 frad13 nrad2 erad2 frad21 frad22 frad23 nrad3 erad3 frad31 frad32 frad33 T_eps ye rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met'
+        primnames       = 'd dye dymu s1 s2 s3 tau b1 b2 b3 nrad1 erad1 frad11 frad12 frad13 nrad2 erad2 frad21 frad22 frad23 nrad3 erad3 frad31 frad32 frad33 nrad4 erad4 frad41 frad42 frad43 nrad5 erad5 frad51 frad52 frad53 T_eps ye ymu rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met'
         autoconvert     = .true.
         saveprim        = .false.
         convert_type    = 'vtuBCCmpi'
@@ -54,7 +54,7 @@
 
 &methodlist
         !wnames       = 'd dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 U_br alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met U_br1 U_br2 U_br3 R_br U5_br h_00'
-        wnames       = 'd dye s1 s2 s3 tau b1 b2 b3 nrad1 erad1 frad11 frad12 frad13 nrad2 erad2 frad21 frad22 frad23 nrad3 erad3 frad31 frad32 frad33 T_eps ye rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met'
+        wnames       = 'd dye dymu s1 s2 s3 tau b1 b2 b3 nrad1 erad1 frad11 frad12 frad13 nrad2 erad2 frad21 frad22 frad23 nrad3 erad3 frad31 frad32 frad33 nrad4 erad4 frad41 frad42 frad43 nrad5 erad5 frad51 frad52 frad53 T_eps ye ymu rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2 Xvec3 psi_met'
         typeadvance     = 'ImEx222' !'threestep'
         typefull1       = 18*'hll'           !KEN
         !typefull1       = 18*'fd_hll'
@@ -91,10 +91,10 @@
                           !'d dye s1 s2 s3 tau b1 b2 b3 T_eps ye rho u1 u2 u3 alp_met beta_met1 beta_met2 beta_met3 Xvec1 Xvec2
                           !Xvec3 psi_met'
         typeB             = 
-                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont' 
-                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
-                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
-                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
+                           7*'noinflow', 3*'cont',25*'noinflow', 7*'noinflow', 8*'cont' 
+                           7*'noinflow', 3*'cont',25*'noinflow', 7*'noinflow', 8*'cont'
+                           7*'noinflow', 3*'cont',25*'noinflow', 7*'noinflow', 8*'cont'
+                           7*'noinflow', 3*'cont',25*'noinflow', 7*'noinflow', 8*'cont'
                            !28*'periodic'
                            !28*'periodic'
                            !28*'periodic'
@@ -105,8 +105,8 @@
                            !4*'symm', 'asymm', 'symm', 2*'asymm', 6*'symm', 'asymm', 3*'symm',
                            ! 'asymm', 2*'symm','asymm','symm', 7*'symm'
                            ! Treating U_br ^i to be a normal vector 
-                           4*'symm', 'asymm', 'symm', 2*'asymm', 1*'symm', 4*'symm', 'asymm',4*'symm', 'asymm',4*'symm', 'asymm', 5*'symm', 'asymm', 3*'symm', 'asymm', 2*'symm','asymm','symm'
-                           6*'noinflow', 3*'cont',15*'noinflow', 6*'noinflow', 8*'cont'
+                           5*'symm', 'asymm', 'symm', 2*'asymm', 'symm', 4*'symm', 'asymm',4*'symm', 'asymm',4*'symm', 'asymm',4*'symm', 'asymm',4*'symm', 'asymm', 6*'symm', 'asymm', 3*'symm', 'asymm', 2*'symm','asymm','symm'
+                           7*'noinflow', 3*'cont',25*'noinflow', 7*'noinflow', 8*'cont'
 &end
 
 
@@ -168,14 +168,18 @@
 &eoslist     
        ! Eos_type_input could be 1. tabulated, 2. idealgas, 3. polytrope 
        !eos_type_input   = 'idealgas'      
-       eos_type_input   = 'tabulated'      
-       table_type_input = 'compose'        
+       eos_type_input   = 'leptonic'      
+       baryon_table_type = 'scollapse'        
       ! eos_table_name = '/mnt/raarchive/hng/EOS/tntyst_nnew.h5'
       ! eos_table_name = '/zhome/academic/HLRS/xfp/xfpcassi/EOS/EOS_TABLES/tntyst_nnew.h5'
       ! eos_table_name = '/mnt/rafast/mcassing/EoS/tntyst_nnew.h5'
       ! eos_table_name = '/mnt/rafast/mcassing/EoS/HSDD2_new.h5'
       ! eos_table_name = '/mnt/rafast/mcassing/EoS/dd2_compose_electrons_ye0-5.h5'
-       eos_table_name = '/mnt/rafast/mcassing/EoS/sfho_compose_electrons_ye0-5.h5'
+       ! Use the matching FIL/BHAC scollapse baryon table plus the 4D leptonic table.
+       baryon_table_name = '/mnt/rafast/mcassing/EoS/scollapse/SFHo_baryon.h5'
+       leptonic_table_name = '/mnt/rafast/mcassing/EoS/scollapse/SFHo_leptonic.h5'
+       lep_use_muons = .true.
+       lep_add_ele_contribution = .true.
        !atmo_type        = 'polytrope'      
        atmo_type        = 'beta_eqm'      
        atmo_gamma       = 2.     
@@ -191,11 +195,11 @@
 &outflowlist
        healpix_det_open = .true.
        healpix_det_num = 9  !6
-       healpix_var_num = 6
+       healpix_var_num = 8
        !healpix_vname_str = "Poynting Mass Ub_mass Spec_j Velo_r psi_met"
        !!healpix_vname_str = "Poynting Ub_mass Velo_r"
         !healpix_vname_str = "M1_nue M1_nuebar M1_nux"
-        healpix_vname_str = "Poynting Ub_mass Velo_r M1_nue M1_nuebar M1_nux"
+        healpix_vname_str = "Poynting Ub_mass Velo_r M1_nue M1_nuebar M1_nux M1_mu M1_mubar"
         healpix_det_radii(1) = 30 !50
         healpix_det_radii(2) = 50 !75
         healpix_det_radii(3) = 75 !100
@@ -233,8 +237,20 @@
    m1_E_atmo = 1.0d-14
    m1_N_atmo = 1.0d-14
    m1_rho_floor = 1.0d-14 !1.0d-10
+   m1_use_neutrinos = T
+   m1_use_muons = T
+   m1_use_5_species = T
+   ! 5-species muonic transport is restricted to Weakhub rates.
+   m1_rates_Weakhub = T
+   m1_rates_analytical = F
+   beta_decay = T
+   plasmon_decay = T
+   bremstrahlung = T
+   pair_annihil = T
+   Weakhub_grey_method = 1
 
-    fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/SFHocompose_grey_npe_noPP_advopac_20240906_Weakhub_grey.h5"
+    ! This must point to the matching 6-spec Weakhub table produced on the FIL side.
+    fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/SFHo_muonic_6spec_Weakhub_grey.h5"
    !fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/conven_TNTYST_new_PPkernels_ESkappa_20250404_Weakhub_grey.h5"
   ! fileWeakhub = "/mnt/rafast/mcassing/Weakhub/dURCA_convenforbetaproc_DD2_grey_npe_20240723_Weakhub_grey.h5"
   ! fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/DD2compose_grey_npe_noPP_advopac_20240906_Weakhub_grey.h5"

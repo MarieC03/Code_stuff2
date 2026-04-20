@@ -44,14 +44,14 @@ module mod_weakhub_parameters
     integer :: IIeta_e  = -1     ! in 2D Weakhub table, the number of points of eta_e
     integer :: IItemp   = -1     ! in 2D Weakhub table, the number of points of temp
     ! 4D table bounds
-    double precision :: logrho_max_IV
-    double precision :: logrho_min_IV
-    double precision :: logtemp_max_IV
-    double precision :: logtemp_min_IV
-    double precision :: ye_max_IV
-    double precision :: ye_min_IV
-    double precision :: logymu_max_IV
-    double precision :: logymu_min_IV
+    double precision :: logrho_max_IV = 0.0d0
+    double precision :: logrho_min_IV = 0.0d0
+    double precision :: logtemp_max_IV = dlog(1.0d2)
+    double precision :: logtemp_min_IV = dlog(1.0d-2)
+    double precision :: ye_max_IV = 0.5d0
+    double precision :: ye_min_IV = 0.0d0
+    double precision :: logymu_max_IV = 0.0d0
+    double precision :: logymu_min_IV = dlog(1.0d-12)
 
     ! 3D table bounds
     double precision :: logrho_max_III

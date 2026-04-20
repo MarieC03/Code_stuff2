@@ -6,6 +6,7 @@ use mod_interpolate
 use mod_imhd_intermediate
 {#IFDEF M1
 use mod_m1, only: m1_correct_asymptotic_fluxes
+use mod_m1_closure, only: m1_enforce_realizability
 }
 use mod_m1_metric_interface ! We now need this even when no M1
 
@@ -526,9 +527,15 @@ do idims= idim^LIM
          end select
       end if
 
-   end do ! Next iw
+end do ! Next iw
 
 end do ! Next idims
+
+{#IFDEF M1
+  {^KSP&
+  call m1_enforce_realizability(metricM1,wnew,ixI^L,ixO^L,^KSP)
+  \}
+}
 
 
 
@@ -562,6 +569,12 @@ end if
 
 call addsource2(qdt*dble(idimmax-idimmin+1)/dble(ndim),ixI^L,ixO^L,1,nw,qtC,&
                 wCT,qt,wnew,x,.false.)
+
+{#IFDEF M1
+  {^KSP&
+  call m1_enforce_realizability(metricM1,wnew,ixI^L,ixO^L,^KSP)
+  \}
+}
 
 if (PP_limiter) then
    deallocate(fC_low)

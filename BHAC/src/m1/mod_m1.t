@@ -89,8 +89,12 @@ module mod_m1
     {#IFDEF M1_RATES 
     ! standard gray microphysics
       call m1_eas_gray_activate()
-      call m1_read_Weakhub()  
-      if(mype==0)  write(*,*)"M1: Actived tabulated rates from Weakhub"
+      if (m1_rates_Weakhub) then
+        call m1_read_Weakhub()
+        if(mype==0) write(*,*)"M1: Activated tabulated rates from Weakhub"
+      else if (m1_rates_analytical) then
+        if(mype==0) write(*,*)"M1: Activated analytical neutrino rates"
+      end if
     ! activates the eas if m1_get_eas is associated to gray rates
       call m1_eas_activate()
     }
@@ -869,6 +873,7 @@ end subroutine m1_correct_asymptotic_fluxes
 
     use mod_m1_internal
     use mod_m1_collisional, only: m1_get_implicit_collisional_sources
+    use mod_m1_closure, only: m1_enforce_realizability
     use mod_m1_eas
     use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin, small_rho_thr
     use mod_Weakhub_reader, only: logtemp_min_IV, logtemp_max_IV,ye_min_IV, ye_max_IV,logrho_min_IV,logrho_max_IV
@@ -900,6 +905,7 @@ end subroutine m1_correct_asymptotic_fluxes
     type(m1_metric_helper) :: metricM1 	
     integer, dimension(1:6) :: signum
     integer :: i
+    double precision :: sqrtg_safe
 
     ixO^L=ixI^L^LSUBdixB;
 
@@ -1015,12 +1021,18 @@ end subroutine m1_correct_asymptotic_fluxes
        ! KEN We do not need this. Nrad and erad prims are getting floored in coll
        !wcons(ix^D, erad^KSP_) = max(wcons(ix^D, erad^KSP_),m1_E_atmo)
        !wcons(ix^D, nrad^KSP_) = max(wcons(ix^D, nrad^KSP_),m1_E_atmo)
-        wcons(ix^D, erad^KSP_) = max(wcons(ix^D, erad^KSP_)/metricM1%sqrtg(ix^D),m1_E_atmo)*metricM1%sqrtg(ix^D)
-        wcons(ix^D, nrad^KSP_) = max(wcons(ix^D, nrad^KSP_)/metricM1%sqrtg(ix^D),m1_N_atmo)*metricM1%sqrtg(ix^D)    
+        sqrtg_safe = metricM1%sqrtg(ix^D)
+        if ((sqrtg_safe .ne. sqrtg_safe) .or. (sqrtg_safe .le. 1.0d-30)) sqrtg_safe = 1.0d0
+        wcons(ix^D, erad^KSP_) = max(wcons(ix^D, erad^KSP_)/sqrtg_safe,m1_E_atmo)*sqrtg_safe
+        wcons(ix^D, nrad^KSP_) = max(wcons(ix^D, nrad^KSP_)/sqrtg_safe,m1_N_atmo)*sqrtg_safe    
 
     \} ! end KSP
 
     {^D& end do \}
+
+    {^KSP&
+      call m1_enforce_realizability(metricM1,wcons,ixI^L,ixO^L,^KSP)
+    \}
 
     call metricM1%destroy()
 

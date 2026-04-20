@@ -261,6 +261,88 @@ contains
   end subroutine m1_update_closure
 !!  } ! end IFNDEF unit_tests
   ! ====================================================================== 
+
+  ! ======================================================================
+  ! Enforce the physically admissible set for one radiation species on a
+  ! densitized BHAC state: E >= E_atmo, N >= N_atmo, and F_i F^i < E^2.
+  subroutine m1_enforce_realizability(metricM1,wstate,ixI^L,ixO^L,species)
+    use mod_m1_metric_interface
+    use, intrinsic :: ieee_arithmetic
+    {#IFNDEF UNIT_TESTS
+    include "amrvacdef.f"
+    }
+    integer, intent(in) :: ixI^L, ixO^L, species
+    double precision, intent(inout) :: wstate(ixI^S,1:nw)
+    type(m1_metric_helper), intent(in) :: metricM1
+    integer :: ix^D
+    integer :: nidx, eidx, fidx^C
+    integer, parameter :: m1_nvars_loc = 1 + 1 + (^NC)
+    double precision :: fmaxfact, sqrtg_safe
+    double precision :: Eprim, Nprim, F2, Fmax2, fluxfact
+    double precision, dimension(^NC) :: F_low, F_up
+
+    fmaxfact = 0.999d0
+
+    {#IFNDEF UNIT_TESTS
+    if (species .gt. ^NS) then
+      call mpistop("In m1_enforce_realizability, got species > NS !")
+    end if
+    }
+
+    nidx = 1 + (species-1) * m1_nvars_loc
+    eidx = 2 + (species-1) * m1_nvars_loc
+    {^C& fidx^C = 2 + ^C + (species-1) * m1_nvars_loc \}
+
+    {^D& do ix^D=ixOmin^D,ixOmax^D \}
+      sqrtg_safe = metricM1%sqrtg(ix^D)
+      if ((.not. ieee_is_finite(sqrtg_safe)) .or. (sqrtg_safe .le. M1_TINY)) then
+        sqrtg_safe = 1.0d0
+      end if
+
+      Eprim = wstate(ix^D,eidx) / sqrtg_safe
+      Nprim = wstate(ix^D,nidx) / sqrtg_safe
+
+      if ((.not. ieee_is_finite(Eprim)) .or. (Eprim .lt. m1_E_atmo)) then
+        Eprim = m1_E_atmo
+      end if
+      if ((.not. ieee_is_finite(Nprim)) .or. (Nprim .lt. m1_N_atmo)) then
+        Nprim = m1_N_atmo
+      end if
+
+      wstate(ix^D,eidx) = Eprim * sqrtg_safe
+      wstate(ix^D,nidx) = Nprim * sqrtg_safe
+
+      {^C&
+      if (.not. ieee_is_finite(wstate(ix^D,fidx^C))) then
+        wstate(ix^D,fidx^C) = 0.0d0
+      end if
+      F_low(^C) = wstate(ix^D,fidx^C)
+      \}
+
+      call metricM1%raise_ixD(ix^D,F_low,F_up)
+      F2 = {^C& F_low(^C)*F_up(^C) +}
+
+      if (.not. ieee_is_finite(F2)) then
+        F2 = 0.0d0
+        {^C& wstate(ix^D,fidx^C) = 0.0d0 \}
+      else if (F2 .lt. 0.0d0) then
+        if (dabs(F2) .lt. 1.0d-12*max(wstate(ix^D,eidx)**2,M1_TINY)) then
+          F2 = 0.0d0
+        else
+          F2 = 0.0d0
+          {^C& wstate(ix^D,fidx^C) = 0.0d0 \}
+        end if
+      end if
+
+      Fmax2 = (fmaxfact*wstate(ix^D,eidx))*(fmaxfact*wstate(ix^D,eidx))
+      if (F2 .gt. Fmax2) then
+        fluxfact = dsqrt(Fmax2/max(F2,M1_TINY))
+        {^C& wstate(ix^D,fidx^C) = fluxfact*wstate(ix^D,fidx^C) \}
+      end if
+    {^D& end do \}
+
+  end subroutine m1_enforce_realizability
+  ! ======================================================================
   
   ! ====================================================================== 
   ! Main (pointwise) closure update routine. This is pointwise 
@@ -273,6 +355,7 @@ contains
     use mod_m1_metric_interface
     use mod_m1_closure_functions
     use mod_rootfinding, only: rootfinding_constrained_newton_raphson, rootfinding_brent, rootfinding_constrained_newton_raphson_M1
+    use, intrinsic :: ieee_arithmetic
     ! ====================================================================== 
     {#IFNDEF UNIT_TESTS 
     include "amrvacdef.f"
@@ -291,16 +374,16 @@ contains
     double precision :: fluxfact,W2, W3 
     double precision :: E1 ! internal E
     logical :: get_vel_W
-    double precision :: Fmag, fac
+    double precision :: Fmag, fac, Fmax2
     double precision :: fmaxfact = 0.999d0 !0.99999d0 !0.999d0
     double precision :: epsF_rel = 1.0d-6
     double precision :: epsF_abs = 1.0d-30
-    double precision :: Hmag2, Jsafe, scaleH
+    double precision :: Hmag2, Jsafe, scaleH, Jfloor
     double precision :: Hn_target,Hn_curr,vdotvlow,corr
     double precision, parameter :: epsH = 1.0d-12
     double precision, parameter :: tau_F = 1.0d-2
     double precision :: zm, zp 
-    logical :: smallF
+    logical :: smallF, closure_bad
     logical :: use_init_zeta_impl
     double precision :: gUU_XX, gUU_XY, gUU_XZ, gUU_YY, gUU_YZ, gUU_ZZ
     double precision :: gDD_XX, gDD_XY, gDD_XZ, gDD_YY, gDD_YZ, gDD_ZZ
@@ -337,6 +420,10 @@ contains
     gUU_YZ = metricM1%gammaUPij(ix^D, 5)
     gUU_ZZ = metricM1%gammaUPij(ix^D, 6)
 
+    if (.not. ieee_is_finite(stateM1%E)) stateM1%E = m1_E_atmo
+    {^C& if (.not. ieee_is_finite(stateM1%F_low(^C))) stateM1%F_low(^C) = 0.0d0 \}
+    {^C& if (.not. ieee_is_finite(stateM1%vel(^C))) stateM1%vel(^C) = 0.0d0 \}
+
 
     ! lower vel -> vlow
     stateM1%vlow(1) = gDD_XX*stateM1%vel(1) + gDD_XY*stateM1%vel(2) + gDD_XZ*stateM1%vel(3)
@@ -364,29 +451,52 @@ contains
     end if 
     }
     ! This is a point by point loop since rootfinding is required 
-    E1 = MAX(stateM1%E, m1_E_atmo) !MAX(1.0d-15,stateM1%E)  
+    E1 = max(stateM1%E, m1_E_atmo)
+    if (.not. ieee_is_finite(E1)) E1 = m1_E_atmo
 
-    stateM1%F2 = {^C&stateM1%F_low(^C)*stateM1%F_up(^C)+}	
-    stateM1%F2 = stateM1%F2+M1_TINY
+    stateM1%F2 = {^C&stateM1%F_low(^C)*stateM1%F_up(^C)+}
+    if (.not. ieee_is_finite(stateM1%F2)) then
+      stateM1%F2 = 0.0d0
+      {^C& stateM1%F_low(^C) = 0.0d0 \}
+      {^C& stateM1%F_up(^C) = 0.0d0 \}
+    else if (stateM1%F2 .lt. 0.0d0) then
+      if (dabs(stateM1%F2) .lt. 1.0d-12*max(E1*E1,M1_TINY)) then
+        stateM1%F2 = 0.0d0
+      else
+        stateM1%F2 = 0.0d0
+        {^C& stateM1%F_low(^C) = 0.0d0 \}
+        {^C& stateM1%F_up(^C) = 0.0d0 \}
+      end if
+    end if
+    stateM1%F2 = max(stateM1%F2, 0.0d0)
 
     if(get_vel_W) then
        ! What we get as input inside of vel is Wv^i
        ! we need to convert it to the eulerian 3-velocity
        W2 = 1.0d0 + {^C&stateM1%vlow(^C)*stateM1%vel(^C)+}
+       if (.not. ieee_is_finite(W2)) W2 = 1.0d0
+       W2 = max(W2, 1.0d0)
        stateM1%W = dsqrt(W2)
        W3 = stateM1%W**3 
        {^C& 
-       stateM1%vlow(^C) = stateM1%vlow(^C) / stateM1%W 
-       stateM1%vel(^C)  = stateM1%vel(^C)  / stateM1%W 
+       stateM1%vlow(^C) = stateM1%vlow(^C) / max(stateM1%W,1.0d0) 
+       stateM1%vel(^C)  = stateM1%vel(^C)  / max(stateM1%W,1.0d0) 
        \} 
-       stateM1%v2 = 1.0d0 - 1.0d0/stateM1%W**2 
+       stateM1%v2 = 1.0d0 - 1.0d0/max(stateM1%W**2,1.0d0) 
     else
        stateM1%v2 = {^C&stateM1%vlow(^C)*stateM1%vel(^C)+}
-       W2 = 1.0d0/(1.0d0 - stateM1%v2)
+       if (.not. ieee_is_finite(stateM1%v2)) stateM1%v2 = 0.0d0
+       stateM1%v2 = max(0.0d0, min(stateM1%v2, 1.0d0 - 1.0d-12))
+       W2 = 1.0d0/max(1.0d0 - stateM1%v2, 1.0d-12)
        stateM1%W = dsqrt(W2)
        W3 = stateM1%W**3 
     end if 
     ! Done converting velocities 
+
+    if (.not. ieee_is_finite(stateM1%W)) stateM1%W = 1.0d0
+    if (.not. ieee_is_finite(stateM1%v2)) stateM1%v2 = 0.0d0
+    stateM1%v2 = max(0.0d0, min(stateM1%v2, 1.0d0 - 1.0d-12))
+    W2 = stateM1%W**2
 
     ! NOTE: Block 1 acausal limiter removed -- fully subsumed by Block 2 below.
     ! Block 2 triggers whenever F/E > fmaxfact, which includes the F>=E case,
@@ -398,33 +508,32 @@ contains
     !stateM1%Fv    = (C stateM1%F_low(^C)*stateM1%vel(^C)+)
     !stateM1%fhatv = (C stateM1%fhat_low(^C)*stateM1%vel(^C)+)
     !----- new way
-    Fmag  = dsqrt(stateM1%F2) + M1_TINY
+    Fmax2 = (fmaxfact*E1)*(fmaxfact*E1)
+    Fmag  = dsqrt(max(stateM1%F2,0.0d0))
     ! safety margin on the upper bound Fmag/E <= fmaxfact
-    if (Fmag > fmaxfact*E1) then
-      fac = (fmaxfact*E1)/Fmag
+    if (stateM1%F2 .gt. Fmax2) then
+      fac = dsqrt(Fmax2/max(stateM1%F2,M1_TINY))
       {^C& stateM1%F_low(^C) = fac*stateM1%F_low(^C) \}
       {^C& stateM1%F_up(^C) = fac*stateM1%F_up(^C) \}
       ! KEN removed raised, with explicit refactor
       !call metricM1%raise_ixD(ix^D, stateM1%F_low, stateM1%F_up)
-      stateM1%F2 = (fmaxfact*E1)**2
-      Fmag = fmaxfact*E1
+      stateM1%F2 = Fmax2
+      Fmag = dsqrt(Fmax2)
     end if
 
     !---------- check is flux is small --------------
-    smallF = (Fmag <= tau_F*E1)
+    smallF = (Fmag <= max(tau_F*E1, epsF_abs))
     if(smallF) then 
       ! flux is tiny: treat radiation as isotropic, fhat is undefined
-      stateM1%Fden = max(epsF_abs, epsF_rel*E1)
+      stateM1%F = 0.0d0
+      stateM1%F2 = 0.0d0
+      stateM1%Fden = 1.0d0
+      {^C& stateM1%F_low(^C) = 0.0d0 \}
+      {^C& stateM1%F_up(^C)  = 0.0d0 \}
       {^C& stateM1%fhat_low(^C) = 0.0d0 \}
       {^C& stateM1%fhat_up(^C)  = 0.0d0 \}
+      stateM1%Fv = 0.0d0
       stateM1%fhatv = 0.0d0
-
-      stateM1%F  = Fmag
-      stateM1%Fv = (^C&stateM1%F_low(^C)*stateM1%vel(^C)+)
-      ! FIX: clamp Fv by Cauchy-Schwarz |Fv| <= |F|*|v| to prevent B0 < 0
-      ! In the isotropic limit Fv should be negligible anyway
-      stateM1%Fv = max(-Fmag*dsqrt(stateM1%v2), &
-                   min( Fmag*dsqrt(stateM1%v2), stateM1%Fv))
     else  
       ! regular anisotropic branch
       ! scale-aware lower bound used whenever we divide by F
@@ -442,6 +551,8 @@ contains
                    min( Fmag*dsqrt(stateM1%v2), stateM1%Fv))
 
       stateM1%fhatv = (^C&stateM1%fhat_low(^C)*stateM1%vel(^C)+)
+      if (.not. ieee_is_finite(stateM1%Fv)) stateM1%Fv = 0.0d0
+      if (.not. ieee_is_finite(stateM1%fhatv)) stateM1%fhatv = 0.0d0
 
       if (dabs(stateM1%fhatv) < 1.0d-15) stateM1%fhatv = 0.0d0
       stateM1%fhatv = max(-1.d0 + 1.d-12, min(1.d0 - 1.d-12, stateM1%fhatv))
@@ -473,9 +584,25 @@ contains
     stateM1%av_thin = stateM1%an_thin
     stateM1%af_thin = stateM1%W*E1*stateM1%fhatv
 
+    closure_bad = .false.
+    if (.not. ieee_is_finite(stateM1%B0)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%Bthin)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%BThick)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%an)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%av)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%aF)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%an_thick)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%av_thick)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%aF_thick)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%an_thin)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%av_thin)) closure_bad = .true.
+    if (.not. ieee_is_finite(stateM1%af_thin)) closure_bad = .true.
+
     if( get_zeta ) then 
-      if ( stateM1%v2 < 1.0d-15 ) then
-        stateM1%zeta = min(dsqrt(stateM1%F2/E1**2),1.0d0)
+      if (closure_bad) then
+        stateM1%zeta = 0.0d0
+      else if ( stateM1%v2 < 1.0d-15 ) then
+        stateM1%zeta = min(dsqrt(max(stateM1%F2,0.0d0)/max(E1**2,M1_TINY)),1.0d0)
       !else if (stateM1%E < m1_E_atmo) then 
         !stateM1%zeta = 0.0d0
       else
@@ -504,27 +631,31 @@ contains
 
         stateM1%HHthickthin = 2.0d0*(stateM1%av_thin*stateM1%av_thick*stateM1%v2 + stateM1%af_thin*stateM1%aF_thick * stateM1%F &
               + stateM1%af_thin*stateM1%av_thick*stateM1%fhatv + stateM1%av_thin*stateM1%aF_thick*stateM1%Fv - stateM1%an_thin*stateM1%an_thick)
+
+        if (.not. ieee_is_finite(stateM1%HH0)) closure_bad = .true.
+        if (.not. ieee_is_finite(stateM1%HHthickthick)) closure_bad = .true.
+        if (.not. ieee_is_finite(stateM1%HHthinthin)) closure_bad = .true.
+        if (.not. ieee_is_finite(stateM1%HHthin)) closure_bad = .true.
+        if (.not. ieee_is_finite(stateM1%HHthick)) closure_bad = .true.
+        if (.not. ieee_is_finite(stateM1%HHthickthin)) closure_bad = .true.
+
+        if (closure_bad) then
+          stateM1%zeta = 0.0d0
+        else
         
-        ! For now we just do Brent, but everything is ready
-        ! for NR.. we just need a decent initial guess
-        !call rootfinding_brent(stateM1%zeta,0.0d0,1.0d0+1.0d-10,1.0d-15,100,flag,xi)
-        ! Try Newton-Raphson first with security checks
-        !stateM1%zeta = 0.5d0  ! Initial guess
-        zm = 0.0d0
-        zp = 1.0d0
-        if(use_init_zeta_impl) then
-          zm = max(0.0d0, stateM1%zeta - 0.01d0)
-          zp = min(1.0d0, stateM1%zeta + 0.01d0)
-        endif
-        call rootfinding_constrained_newton_raphson_M1(stateM1%zeta, zm, zp, 1.0d-15, 100, flag, xi, dxidz)
-        !call rootfinding_brent(stateM1%zeta, 0.0d0, 1.0d0, 1.0d-15, 100, flag, xi)
-        ! Security checks: if NR failed or gave invalid result, fall back to Brent
-        if (flag .ne. 0 .or. stateM1%zeta > 1.0d0 .or. stateM1%zeta < 0.0d0) then
-          ! Fall back to Brent method
-          stateM1%zeta = 0.5d0  ! Reset initial guess
-          call rootfinding_brent(stateM1%zeta, 0.0d0, 1.0d0, 1.0d-15, 100, flag, xi)
-          if (flag .ne. 0) then
-            stateM1%zeta = 1.0d0
+          zm = 0.0d0
+          zp = 1.0d0
+          if(use_init_zeta_impl) then
+            zm = max(0.0d0, stateM1%zeta - 0.01d0)
+            zp = min(1.0d0, stateM1%zeta + 0.01d0)
+          endif
+          call rootfinding_constrained_newton_raphson_M1(stateM1%zeta, zm, zp, 1.0d-15, 100, flag, xi, dxidz)
+          if (flag .ne. 0 .or. .not. ieee_is_finite(stateM1%zeta) .or. stateM1%zeta > 1.0d0 .or. stateM1%zeta < 0.0d0) then
+            stateM1%zeta = 0.5d0
+            call rootfinding_brent(stateM1%zeta, 0.0d0, 1.0d0, 1.0d-15, 100, flag, xi)
+            if (flag .ne. 0 .or. .not. ieee_is_finite(stateM1%zeta)) then
+              stateM1%zeta = 0.0d0
+            end if
           end if
         end if
       end if
@@ -533,11 +664,17 @@ contains
 
     ! Finally fill in primitive array:
     ! Compute J, H_i and store zeta
+    if (.not. ieee_is_finite(stateM1%zeta)) stateM1%zeta = 0.0d0
+    stateM1%zeta = max(0.0d0, min(stateM1%zeta, 1.0d0))
     stateM1%chi = m1_closure_func(stateM1%zeta)
+    if (.not. ieee_is_finite(stateM1%chi)) stateM1%chi = 1.0d0/3.0d0
+    stateM1%chi = max(1.0d0/3.0d0, min(stateM1%chi, 1.0d0))
     stateM1%dthin = 1.5d0*stateM1%chi-0.5d0
     stateM1%dthick = 1.0d0 - stateM1%dthin
 
     stateM1%J = stateM1%B0 + stateM1%dthin*stateM1%Bthin + stateM1%dthick*stateM1%BThick
+    Jfloor = max(M1_TINY, 1.0d-12*E1)
+    if (.not. ieee_is_finite(stateM1%J)) stateM1%J = Jfloor
 
     {^C& stateM1%H_low(^C) = - (stateM1%av+stateM1%dthin*stateM1%av_thin+stateM1%dthick*stateM1%av_thick)*stateM1%vlow(^C) &
         -(stateM1%aF+stateM1%dthick*stateM1%aF_thick)*stateM1%F_low(^C) &
@@ -562,10 +699,26 @@ contains
     !KEN changed this to make it inline
     !call metricM1%raise_ixD(ix^D, stateM1%H_low, stateM1%H_up)
     
+    if (stateM1%J < Jfloor) then
+      stateM1%J = Jfloor
+      stateM1%zeta = 0.0d0
+      stateM1%chi = 1.0d0/3.0d0
+      stateM1%dthin = 0.0d0
+      stateM1%dthick = 1.0d0
+      {^C& stateM1%H_low(^C) = 0.0d0 \}
+      {^C& stateM1%H_up(^C)  = 0.0d0 \}
+    end if
+
     Hmag2 = {^C& stateM1%H_low(^C)*stateM1%H_up(^C) +}
+    if (.not. ieee_is_finite(Hmag2)) then
+      Hmag2 = 0.0d0
+      {^C& stateM1%H_low(^C) = 0.0d0 \}
+      {^C& stateM1%H_up(^C)  = 0.0d0 \}
+    end if
+    Hmag2 = max(Hmag2, 0.0d0)
     Jsafe = max(stateM1%J, M1_TINY)
     if (Hmag2 > (1.d0 - epsH)**2 * Jsafe*Jsafe) then
-      scaleH = (1.d0 - epsH) * Jsafe / dsqrt(Hmag2)
+      scaleH = (1.d0 - epsH) * Jsafe / dsqrt(max(Hmag2,M1_TINY))
       {^C& stateM1%H_low(^C) = scaleH*stateM1%H_low(^C) \}
       {^C& stateM1%H_up(^C)  = scaleH*stateM1%H_up(^C)  \}
     end if
@@ -585,6 +738,9 @@ contains
     ! returns J~0 (failed bracket, atmosphere cell) this would give Inf/NaN.
     stateM1%Gamma = stateM1%W*(E1-stateM1%Fv) &
         / max(stateM1%J, max(epsF_abs, epsF_rel*E1)) + M1_TINY
+    if (.not. ieee_is_finite(stateM1%Gamma)) stateM1%Gamma = 1.0d0
+    stateM1%Gamma = max(stateM1%Gamma, M1_TINY)
+    stateM1%Gamma = min(stateM1%Gamma, 1.0d12)
 
     stateM1%E = E1
 
@@ -606,14 +762,20 @@ contains
       double precision :: J_closure, H_sq
       double precision :: chi, dthick, dthin 
       chi = m1_closure_func(z)
+      if (.not. ieee_is_finite(chi)) chi = 1.0d0/3.0d0
+      chi = max(1.0d0/3.0d0, min(chi, 1.0d0))
       dthin = 1.5d0 * chi - 0.5d0
       dthick = 1.0d0 - dthin
       J_closure = stateM1%B0 + dthin*stateM1%Bthin + dthick*stateM1%BThick
       H_sq      = stateM1%HH0 + dthin*dthin*stateM1%HHthinthin &
 	      + dthick*dthick*stateM1%HHthickthick &
           + dthin*dthick * stateM1%HHthickthin + dthick * stateM1%HHthick + dthin  * stateM1%HHthin
-      
-      xi = ( J_closure**2*z**2 - H_sq ) / ( stateM1%E_closure**2 )
+
+      if ((.not. ieee_is_finite(J_closure)) .or. (.not. ieee_is_finite(H_sq))) then
+        xi = 1.0d99
+      else
+        xi = ( J_closure**2*z**2 - H_sq ) / max(stateM1%E_closure**2, M1_TINY)
+      end if
     end function 
     ! ====================================================================== 
     function dxidz(z)
@@ -627,6 +789,8 @@ contains
 
 
       chi = m1_closure_func(z)
+      if (.not. ieee_is_finite(chi)) chi = 1.0d0/3.0d0
+      chi = max(1.0d0/3.0d0, min(chi, 1.0d0))
       dthin = 1.5d0 * chi - 0.5d0
       dthick = 1.0d0 - dthin
       
@@ -636,6 +800,7 @@ contains
           + dthin*dthick * stateM1%HHthickthin + dthick * stateM1%HHthick + dthin  * stateM1%HHthin
       
       dchidz = m1_closure_deriv(z)
+      if (.not. ieee_is_finite(dchidz)) dchidz = 0.0d0
       d_dthin_dz = 1.5d0*dchidz
       d_dthick_dz = -1.5d0*dchidz
   
@@ -651,7 +816,11 @@ contains
       !KEN changed "+ 2.0d0*J_closure**2*z" from "- 2.0d0*J_closure**2*z" 
       dxidz = 2.0d0*J_closure*dJdz*z**2 + 2.0d0*J_closure**2*z &
            - d_dthin_dz*dHsqddthin - d_dthick_dz * dHsqddthick
-      dxidz = dxidz / (stateM1%E_closure * stateM1%E_closure)  ! ADD THIS LINE
+      if ((.not. ieee_is_finite(dxidz)) .or. (.not. ieee_is_finite(J_closure)) .or. (.not. ieee_is_finite(H_sq))) then
+        dxidz = 0.0d0
+      else
+        dxidz = dxidz / max(stateM1%E_closure * stateM1%E_closure, M1_TINY)
+      end if
     end function dxidz
     ! ====================================================================== 
     ! ====================================================================== 

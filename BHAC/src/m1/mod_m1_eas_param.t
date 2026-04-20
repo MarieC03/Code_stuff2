@@ -30,6 +30,13 @@ module mod_m1_eas_param
   integer :: m1_i_mubar = 5
   integer :: m1_i_photon = 6
 
+  logical :: m1_rates_Weakhub = .true.
+  logical :: m1_rates_analytical = .false.
+  logical :: beta_decay = .true.
+  logical :: plasmon_decay = .true.
+  logical :: bremstrahlung = .true.
+  logical :: pair_annihil = .true.
+
   double precision, allocatable :: m1_eas_ixD(:, :) !(m1_num_eas,^NS)  !(:,:,:) 
   ! not used:
   double precision, allocatable :: m1_eas({^D&:,}, :, :) !(ixI^L,m1_num_eas,^NS)  !(:,:,:)

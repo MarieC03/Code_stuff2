@@ -31,6 +31,7 @@ module mod_m1_tau_optical
     double precision :: eas_eq(1:m1_num_eas)        !>eq. rates
     double precision, dimension(1:fluid_vars) :: fluid_Prim  !> fluid vars
     double precision, dimension(1:m1_numvars_internal) :: wrad
+    double precision, dimension(1:^NC) :: vel_dummy
     type(m1_metric_helper) :: metricM1
     ! internal for tau
     integer :: ixs1,ixs2,ixs3, icomp
@@ -40,9 +41,11 @@ module mod_m1_tau_optical
     double precision :: ds2_line, ds_line    !> line element
     double precision :: tau_opt_path         !> optical depth
     double precision :: kappa_ave             !> average opacities
+    double precision :: N_dummy, eta_dummy
     integer :: ni,nj,nk
 
     ixO^L=ixI^L^LSUBdixB;
+    timeCurrent = qtC
 
     {#IFDEF UNIT_TESTS2
     call fill_metric(metricM1)
@@ -63,12 +66,25 @@ module mod_m1_tau_optical
 
       {^KSP&  !+++++++++++
 
-        wrad(m1_energy_) = dummy
-        {^C& wrad(m1_flux^C_) = dummy \}
-        call m1_get_eas(wrad,^KSP,ix^D,eas_eq,fluid_Prim)
+        wrad(:) = 0.0d0
+        vel_dummy(:) = 0.0d0
+        eas_eq(:) = 1.0d-30
 
-        !> convert Kappa_eq from cgs (1/cm) to code units
-        eas_eq(:) = eas_eq/LENGTHGF
+        if (m1_rates_Weakhub) then
+          wrad(m1_energy_) = dummy
+          {^C& wrad(m1_flux^C_) = dummy \}
+          call m1_get_eas(wrad,^KSP,ix^D,eas_eq,fluid_Prim)
+
+          !> convert Kappa_eq from cgs (1/cm) to code units
+          eas_eq(:) = eas_eq/LENGTHGF
+        else
+          wrad(m1_energy_) = m1_E_atmo
+          {^C& wrad(m1_flux^C_) = 0.0d0 \}
+          N_dummy = m1_N_atmo
+          eta_dummy = 0.0d0
+          call calculate_m1_eas_ixD(wrad,N_dummy,ix^D,1.0d0,vel_dummy,1.0d0,0.0d0, &
+               ixI^L,x,eas_eq,^KSP,fluid_Prim,eta_dummy,.true.,qdt)
+        endif
 
         wradimpl(ix^D,Q_er^KSP_) = eas_eq(Q_ems) 
         wradimpl(ix^D,kappa_a^KSP_) = eas_eq(k_a)

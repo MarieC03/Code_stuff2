@@ -238,11 +238,11 @@ contains
      eas_eq(k_n) = result
 
      !if(m1_use_muons .ne. .true.) then
-     if((speciesKSP .eq. 4) .or. (speciesKSP .eq. 5)) then
-      eas_eq(k_a) = 0.0d0
-      eas_eq(k_s) = 0.0d0
-      eas_eq(k_n) = 0.0d0
-     end if 
+     !if((speciesKSP .eq. 4) .or. (speciesKSP .eq. 5)) then
+     ! eas_eq(k_a) = 0.0d0
+     ! eas_eq(k_s) = 0.0d0
+     ! eas_eq(k_n) = 0.0d0
+     !end if 
      !end if 
      !--------------
      ! Weakhub reader should be called once at beginning of bhac

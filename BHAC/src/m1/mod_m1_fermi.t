@@ -148,6 +148,7 @@ contains
  subroutine get_neutrino_temp_ixD(wrad,N,ix^D,Gamma,velU,Wlor,Jrad, eta, speciesKSP, fluid_Prim, av_energy, T_nu, T_fluid, timeCurrent1,x)    
    use mod_m1_internal
    use mod_m1_eas_param 
+   use mod_eos, only: eos_tempmin
    use mod_Weakhub_reader, only: logtemp_min_IV
    use ieee_arithmetic
    {#IFDEF UNIT_TESTS
@@ -176,15 +177,21 @@ contains
    double precision :: av_energy_MEV
    double precision :: av_energy1
    double precision :: F3
+   double precision :: T_floor_rates
 
      Fv  = {^C&wrad(m1_flux^C_)*velU(^C)+}
 
      E = wrad(m1_energy_) 
      n_dens = N/Gamma
 
+      T_floor_rates = eos_tempmin
+      if (m1_rates_Weakhub) then
+        T_floor_rates = max(T_floor_rates, exp(logtemp_min_IV))
+      endif
+
       ! neutrinos atmosphere?
       if((n_dens .lt. m1_E_atmo*100) .or. (E .lt. m1_E_atmo*100) .or. &
-         (T_fluid .le. exp(logtemp_min_IV)*1.05)) then
+         (T_fluid .le. T_floor_rates*1.05d0)) then
            av_energy = m1_E_atmo
            T_nu = 1.d-2
            return
@@ -272,5 +279,4 @@ contains
    end subroutine blackbody_ixD
 
 end module mod_m1_fermi
-
 

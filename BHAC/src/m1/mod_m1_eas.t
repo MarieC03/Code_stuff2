@@ -41,17 +41,28 @@ contains
         write(99,*) "You need 3d tables for microphysical eas"
       }
     }
-    m1_get_eas => m1_get_eas_microphysical_gray_Weakhub
+    if (m1_rates_Weakhub) then
+      m1_get_eas => m1_get_eas_microphysical_gray_Weakhub
+    else
+      nullify(m1_get_eas)
+    endif
   
   end subroutine m1_eas_gray_activate
 
   subroutine m1_eas_activate()
-    if( .not. associated(m1_get_eas) ) then
+    if (m1_rates_Weakhub .and. .not. associated(m1_get_eas)) then
       {#IFDEF UNIT_TESTS
            write(99,*)"Error: no microphysics implementation provided for M1."
       }
       {#IFNDEF UNIT_TESTS
        call mpistop("Error: no microphysics implementation provided for M1.")
+       }
+    else if (.not. m1_rates_Weakhub .and. .not. m1_rates_analytical) then
+      {#IFDEF UNIT_TESTS
+           write(99,*)"Error: no M1 neutrino-rate implementation selected."
+      }
+      {#IFNDEF UNIT_TESTS
+       call mpistop("Error: no M1 neutrino-rate implementation selected.")
        }
     end if
   end subroutine m1_eas_activate
@@ -351,105 +362,71 @@ contains
 
  !****************************************************************************
  
-  subroutine calculate_m1_eas_ixD(wrad,N,ix^D,Gamma,vel,Wlor,Jrad,ixI^L,x,eas, speciesKSP, fluid_Prim, eta_rad,calc_eqRates_here, qdt)    
+  subroutine calculate_m1_eas_ixD(wrad,N,ix^D,Gamma,vel,Wlor,Jrad,ixI^L,x,eas, speciesKSP, fluid_Prim, eta_rad,calc_eqRates_here, qdt)
     use mod_m1_internal
     use mod_m1_fermi
     use mod_m1_constants
     use mod_m1_eas_microphysical_gray
-    use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin, eos_yemax, eos_ymumin, &
-         eos_temp_get_all_one_grid
-    !............................
-    use mod_Weakhub_reader !, only: logrho_IVtable,IVtemp,logTemp_IVtable,Ye_IVtable, &
-      ! kappa_a_en_grey_table,kappa_s_grey_table,kappa_a_num_grey_table
+    use mod_eos, only: small_rho, small_temp, eos_yemin, eos_yemax, eos_ymumin, eos_ymumax, &
+         eos_tempmin, eos_tempmax, eos_temp_get_all_one_grid
     use mod_m1_eas_param
+    use, intrinsic :: ieee_arithmetic
     {#IFDEF UNIT_TESTS
     use mod_m1_tests
-    }
-    {#IFNDEF UNIT_TESTS
-    !include "amrvacdef.f"
     }
     integer, intent(in) :: ix^D, ixI^L
     integer, intent(in) :: speciesKSP
     double precision, intent(inout) :: wrad(1:m1_numvars_internal)
-    double precision, intent(inout) :: fluid_Prim(1:fluid_vars) !> fluid variables
+    double precision, intent(inout) :: fluid_Prim(1:fluid_vars)
     double precision, intent(inout) :: eas(1:m1_num_eas)
     double precision, intent(in)    :: x(ixI^S, 1:ndim)
     double precision, intent(in)    :: Gamma, Wlor, Jrad
-    double precision, intent(in)    :: vel(1:^NC) 
-    double precision, intent(inout) :: N      !> (nrad*Gamma)/sqrtg
-    double precision, intent(inout) :: eta_rad !> degeneracy parameter of neutrinos
-    logical, intent(in) :: calc_eqRates_here  !> if to calculate equilibrium opacities
-    double precision, intent(in)    :: qdt    !> timestep
-    ! internal
-    double precision, parameter :: Qnp1 = 1.2935 ! MeV !> rest-mass energy difference n&p (Ruffert 95)
+    double precision, intent(in)    :: vel(1:^NC)
+    double precision, intent(inout) :: N
+    double precision, intent(inout) :: eta_rad
+    logical, intent(in)             :: calc_eqRates_here
+    double precision, intent(in)    :: qdt
+    double precision, parameter     :: Qnp1 = 1.2935d0
     double precision :: eas_eq(1:m1_num_eas)
-    double precision :: T_fluid, rho_fluid, ye_fluid, ymu_fluid
-    double precision :: tau_opt    !> optical depth
-    double precision :: T_nu       !> temperature of neutrinos
-    double precision :: av_energy  !> average energy of neutrinos
-    double precision :: eta_e !> degeneracy parameter of electrons
-    double precision :: Black_er   !> Blackbody energy rates
-    double precision :: Black_nr   !> Blackbody energy rates
-    double precision :: n_prim
-    double precision :: chem_pot   !> neutrino chemical potential
-    double precision :: Q_free, Q_free_n !> emissivity of free streaming alla Ruffert et.al 95
+    double precision :: rho_fluid, T_fluid, ye_fluid, ymu_fluid
+    double precision :: rho_cgs, tau_opt
+    double precision :: T_nu, av_energy
+    double precision :: eta_e, chem_pot
+    double precision :: Black_er, Black_nr
     double precision :: eps,prs,ent,cs2,dedt,dpderho,dpdrhoe
     double precision :: xa,xh,xn,xp,abar1,zbar1,mu_e,mu_n,mu_p,mu_mu,muhat,munu
-    double precision :: UNITS_rho,UNITS_chem_pot,rho_cgs
-    double precision :: Qems,Qems_n,kappa_a_analyt,kappa_n_analyt
-    double precision :: Qems_tmp, Qems_n_tmp
-    logical :: is_known_tau_opt = .false.
-    !double precision :: tset !0.1d0 !0.5d0 !1.0d-2
-    logical :: eas_correction_standard = .true. !.true.
-    logical :: eas_correction_Tnu = .false. !.true.
-    logical :: eas_correction_tanh = .false.
-    double precision :: tanh_factor
+    double precision :: nb, eta_hat, eta_np, eta_pn
+    double precision :: block_factor_n, block_factor_p
+    double precision :: zeta_cc, nfac, efac, efac_s
+    double precision :: ymp, ymn, C_nucleus
+    double precision :: kappa_a_cc, kappa_n_cc, kappa_s_nc
+    double precision :: kappa_a_tmp, kappa_n_tmp
+    double precision :: Qems, Qems_n, Qems_tmp, Qems_n_tmp
+    double precision :: Q_total_mev, R_total_cgs
+    double precision :: BB_n_mev, BB_e_mev, g_factor
+    double precision :: Tnu_ratio, tanh_factor
+    logical :: eas_correction_standard, eas_correction_Tnu, eas_correction_tanh
 
-    !...........................
-    integer :: i,j,k,itemp
-    double precision :: LogTemp
-    double precision ATmin,ATmax,AYemin,AYemax,Arhomin,Arhomax,Atstep,Arhostep,Ayestep
-    integer :: Ntmax,Nrhomax,Nyemax
-    integer:: iloop  
     {#IFDEF UNIT_TESTS
-    !> activate gray else called in m1_startup
        call m1_eas_gray_activate()
     }
 
-    !tset = 0.3d0!1000000000.d0 !0.3d0 !0.4d0 !30.0*qdt !20.0*qdt !15.0 * qdt
+    eas(:) = 1.0d-30
+    eas_eq(:) = 1.0d-60
 
-    !n_prim = N/Gamma  ! not used
+    rho_fluid = max(fluid_Prim(idx_rho), small_rho)
+    ye_fluid = min(max(fluid_Prim(idx_Ye), eos_yemin), eos_yemax)
+    T_fluid = max(fluid_Prim(idx_T), max(small_temp, eos_tempmin))
+    T_fluid = min(T_fluid, eos_tempmax)
+    ymu_fluid = 0.0d0
+    if (m1_use_muons) ymu_fluid = min(max(fluid_Prim(idx_Ymu), eos_ymumin), eos_ymumax)
 
-    rho_fluid  = fluid_Prim(idx_rho)
-    ye_fluid   = fluid_Prim(idx_ye)
-    T_fluid    = fluid_Prim(idx_T)
-    ymu_fluid  = eos_ymumin
-    if (m1_use_muons) ymu_fluid = fluid_Prim(idx_ymu)
-
-
-
-     {#IFDEF M1_TAU_OPT
-      if(calc_eqRates_here) then
-         call m1_get_eas(wrad,speciesKSP,ix^D,eas_eq,fluid_Prim)
-         eas_eq(:) = eas_eq/LENGTHGF
-      else 
-       eas_eq = eas !since wradimpl and eas had equilib. kappas form tau_path
-      end if
-     }
-     {#IFNDEF M1_TAU_OPT
-    !> ---- obtain the equilibrium gray rates from Weakhub --------
-    !> associated m1_get_eas-pointer to whatever sub_m1_get_eas is:
-    !> rates from table as Weakhub if:
-    !> sub_m1_get_eas() = m1_get_eas_microphysical_gray_Weakhub via pointer m1_get_eas
-    !> output: eas_eq, ! equilibrium gray k_a, k_s,k_n
-    call m1_get_eas(wrad,speciesKSP,ix^D,eas_eq,fluid_Prim)
-    !call m1_get_eas_microphysical_gray_Weakhub(wrad,n_prim,speciesKSP,ix^D,eas_eq,fluid_Prim)
-    eas_eq(:) = eas_eq/LENGTHGF
-    }
-
+    fluid_Prim(idx_rho) = rho_fluid
+    fluid_Prim(idx_T) = T_fluid
+    fluid_Prim(idx_Ye) = ye_fluid
+    if (m1_use_muons) fluid_Prim(idx_Ymu) = ymu_fluid
 
     {#IFNDEF UNIT_TESTS
-    !> get the chemical potentials from EoS-table
     if (m1_use_muons) then
       call eos_temp_get_all_one_grid(rho_fluid,T_fluid,ye_fluid,eps,prs=prs,ent=ent,&
            cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
@@ -463,141 +440,277 @@ contains
     endif
     }
 
+    if (.not. ieee_is_finite(mu_e) .or. .not. ieee_is_finite(mu_n) .or. .not. ieee_is_finite(mu_p)) return
+    if (.not. ieee_is_finite(mu_mu)) mu_mu = 0.0d0
+    if (.not. ieee_is_finite(xn) .or. xn < 0.0d0) xn = max(0.0d0, 1.0d0 - ye_fluid - ymu_fluid)
+    if (.not. ieee_is_finite(xp) .or. xp < 0.0d0) xp = max(0.0d0, min(1.0d0, ye_fluid + ymu_fluid))
+    if (.not. ieee_is_finite(xh) .or. xh < 0.0d0) xh = 0.0d0
+    if (.not. ieee_is_finite(abar1) .or. abar1 <= 0.0d0) abar1 = 0.0d0
+    if (.not. ieee_is_finite(zbar1)) zbar1 = 0.0d0
 
-    UNITS_rho = INVRHOGF 
-    UNITS_chem_pot = 1.0d0
-
-    if(speciesKSP .eq. m1_i_nue) then
+    select case(speciesKSP)
+    case(m1_i_nue)
       chem_pot = mu_e + mu_p - mu_n - Qnp1
-    else if(speciesKSP .eq. m1_i_nuebar) then
-      chem_pot = -1.0d0 * (mu_e + mu_p - mu_n - Qnp1)
-    else if(speciesKSP .eq. m1_i_nux) then
-      chem_pot = 0.0d0
-    else if(speciesKSP .eq. m1_i_mu) then
+    case(m1_i_nuebar)
+      chem_pot = -(mu_e + mu_p - mu_n - Qnp1)
+    case(m1_i_mu)
       chem_pot = mu_mu + mu_p - mu_n - Qnp1
-    else if(speciesKSP .eq. m1_i_mubar) then
-      chem_pot = -1.0d0 * (mu_mu + mu_p - mu_n - Qnp1)
-    end if 
+    case(m1_i_mubar)
+      chem_pot = -(mu_mu + mu_p - mu_n - Qnp1)
+    case default
+      chem_pot = 0.0d0
+    end select
 
-     eta_rad = chem_pot/T_fluid  !> degeneracy parameter
-     eta_e = mu_e / T_fluid
+    eta_rad = chem_pot / max(T_fluid, 1.0d-12)
+    eta_e = mu_e / max(T_fluid, 1.0d-12)
 
-     is_known_tau_opt = .True.
-    if(is_known_tau_opt) then
-      rho_cgs = rho_fluid * UNITS_rho 
-      !> get optical depth from empirical formula
-      tau_opt = exp(DLOG10(10.d0)*( 0.96d0 * ( DLOG10(rho_cgs) / DLOG10(10.0d0) - 11.7d0)))
-      {#IFDEF M1_TAU_OPT_USE
+    rho_cgs = max(rho_fluid * INVRHOGF, 1.0d-99)
+    tau_opt = 0.0d0
+    if (rho_cgs > 0.0d0) tau_opt = 10.0d0**(0.96d0 * (DLOG10(rho_cgs) - 11.7d0))
+    {#IFDEF M1_TAU_OPT_USE
        tau_opt = eas(tau_path)
-      }
-       if((speciesKSP .eq. 1) .or. (speciesKSP .eq. 2) ) then
-         eta_rad = eta_rad * (1.0d0 - exp(-tau_opt))
-       end if 
-    end if 
+    }
+    if (speciesKSP == m1_i_nue .or. speciesKSP == m1_i_nuebar) then
+      eta_rad = eta_rad * (1.0d0 - exp(-max(tau_opt, 0.0d0)))
+    endif
 
-    !eas(Q_ems) = 0.0d0
-    !eas(Q_ems_n) = 0.0d0
-
-    Qems = 0.0d0
-    Qems_n = 0.0d0
-    Qems_tmp = 0.0d0
-    Qems_n_tmp = 0.0d0
-
-    !> calculate T_eff neutrino
-    !KEN had to add T_fluid
-    call get_neutrino_temp_ixD(wrad,N,ix^D,Gamma,vel,Wlor,Jrad,eta_rad, speciesKSP, fluid_Prim, av_energy, T_nu, T_fluid, timeCurrent, x(ix^D,:))
-
-    !> get Blackbody function
+    call get_neutrino_temp_ixD(wrad,N,ix^D,Gamma,vel,Wlor,Jrad,eta_rad,speciesKSP,fluid_Prim,&
+         av_energy,T_nu,T_fluid,timeCurrent,x(ix^D,:))
     call blackbody_ixD(wrad,ix^D,speciesKSP,fluid_Prim,T_fluid,eta_rad,Black_er,Black_nr)
 
-    if((speciesKSP .eq. m1_i_nux) .or. (speciesKSP .eq. m1_i_mu) .or. (speciesKSP .eq. m1_i_mubar)) then
-      call m1_eas_analytic_brems(speciesKSP,eta_rad,ye_fluid,ymu_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
-      Qems_tmp = Qems_tmp + Qems
-      Qems_n_tmp = Qems_n_tmp + Qems_n
+    if (m1_use_muons) then
+      if (speciesKSP == m1_i_nux) then
+        g_factor = 2.0d0
+      else
+        g_factor = 1.0d0
+      endif
+    else
+      if (speciesKSP == m1_i_nux) then
+        g_factor = 4.0d0
+      else
+        g_factor = 1.0d0
+      endif
+    endif
 
-      call m1_eas_analytic_pair(speciesKSP,eta_rad,eta_e,ye_fluid,T_fluid,rho_fluid,eas,Qems,Qems_n)
-      Qems_tmp = Qems_tmp + Qems
-      Qems_n_tmp = Qems_n_tmp + Qems_n
+    BB_n_mev = g_factor * 4.0d0 * PI * CLITE_CM / HC_MEVCM**3 * T_fluid**3 * fermi_dirac(eta_rad, 2)
+    BB_e_mev = g_factor * 4.0d0 * PI * CLITE_CM / HC_MEVCM**3 * T_fluid**4 * fermi_dirac(eta_rad, 3)
+    if (.not. ieee_is_finite(BB_n_mev) .or. BB_n_mev <= 0.0d0) BB_n_mev = 1.0d-60
+    if (.not. ieee_is_finite(BB_e_mev) .or. BB_e_mev <= 0.0d0) BB_e_mev = 1.0d-60
 
-      call m1_eas_analytic_plasmon(speciesKSP,eta_rad,eta_e,ye_fluid,T_fluid,rho_fluid,eas,Qems,Qems_n)
-      Qems_tmp = Qems_tmp + Qems
-      Qems_n_tmp = Qems_n_tmp + Qems_n
+    nb = rho_cgs * AVOGADRO
+    eta_hat = (mu_n - mu_p - Qnp1) / max(T_fluid, 1.0d-12)
+    if (rho_cgs < 2.0d11) then
+      eta_pn = nb * max(xp, 0.0d0)
+      eta_np = nb * max(xn, 0.0d0)
+    else if (abs(eta_hat) > 1.0d-10) then
+      eta_pn = nb * (xn - xp) / (exp(eta_hat) - 1.0d0)
+      eta_np = nb * (xp - xn) / (exp(-eta_hat) - 1.0d0)
+    else
+      eta_pn = nb * max(xp, 0.0d0)
+      eta_np = nb * max(xn, 0.0d0)
+    endif
+    if (.not. ieee_is_finite(eta_pn) .or. eta_pn < 0.0d0) eta_pn = 0.0d0
+    if (.not. ieee_is_finite(eta_np) .or. eta_np < 0.0d0) eta_np = 0.0d0
 
-      Qems_tmp = Qems_tmp * MEV_TO_ERG_KEN * RHOGF * EPSGF / TIMEGF  !* LENGTHGF ! LENGTHGF only beacause of blackbody
-      Qems_n_tmp = Qems_n_tmp * MNUC_CGS * RHOGF / TIMEGF !* LENGTHGF ! LENGTHGF only beacause of blackbody
+    ymp = xp / (1.0d0 + 2.0d0 / 3.0d0 * max(0.0d0, mu_p / max(T_fluid, 1.0d-12)))
+    ymn = xn / (1.0d0 + 2.0d0 / 3.0d0 * max(0.0d0, mu_n / max(T_fluid, 1.0d-12)))
+    if (.not. ieee_is_finite(ymp)) ymp = max(xp, 0.0d0)
+    if (.not. ieee_is_finite(ymn)) ymn = max(xn, 0.0d0)
+    C_nucleus = 0.0d0
+    if (abar1 > 0.0d0 .and. xh > 0.0d0) then
+      C_nucleus = SIGMA_0 / 16.0d0 * abar1 * (1.0d0 - zbar1 / abar1)**2
+      if (.not. ieee_is_finite(C_nucleus)) C_nucleus = 0.0d0
+    endif
+    efac_s = (T_fluid / 0.510998910d0)**2 * fermi_dirac(eta_rad, 5) / max(fermi_dirac(eta_rad, 3), 1.0d-40)
+    kappa_s_nc = nb * ((1.0d0 + 5.0d0 * ALPHA**2) / 24.0d0 * SIGMA_0 * ymn + &
+                 (4.0d0 * (CV - 1.0d0)**2 + 5.0d0 * ALPHA**2) / 24.0d0 * SIGMA_0 * ymp + &
+                 C_nucleus * xh) * efac_s
+    if (.not. ieee_is_finite(kappa_s_nc) .or. kappa_s_nc <= 0.0d0) kappa_s_nc = 1.0d-60
 
-      eas_eq(k_a) = eas_eq(k_a) + Qems_tmp / (Black_er + 1.0d-40) ! Teilen ist immer tricky. Deswegen liebe safe
-      eas_eq(k_n) = eas_eq(k_n) + Qems_n_tmp / (Black_nr + 1.0d-40)
-    end if 
+    if (m1_rates_Weakhub) then
+      {#IFDEF M1_TAU_OPT
+      if (calc_eqRates_here) then
+        call m1_get_eas(wrad,speciesKSP,ix^D,eas_eq,fluid_Prim)
+        eas_eq(:) = eas_eq / LENGTHGF
+      else
+        eas_eq = eas
+      endif
+      }
+      {#IFNDEF M1_TAU_OPT
+      call m1_get_eas(wrad,speciesKSP,ix^D,eas_eq,fluid_Prim)
+      eas_eq(:) = eas_eq / LENGTHGF
+      }
 
-    eas(Q_ems) = Black_er * eas_eq(k_a) 
-    eas(Q_ems_n) = Black_nr * eas_eq(k_n)
+      if (.not. ieee_is_finite(eas_eq(k_a)) .or. eas_eq(k_a) <= 0.0d0) eas_eq(k_a) = 1.0d-60
+      if (.not. ieee_is_finite(eas_eq(k_n)) .or. eas_eq(k_n) <= 0.0d0) eas_eq(k_n) = 1.0d-60
+      if (.not. ieee_is_finite(eas_eq(k_s)) .or. eas_eq(k_s) <= 0.0d0) eas_eq(k_s) = kappa_s_nc / LENGTHGF
 
-    eas(k_a) = eas_eq(k_a) 
-    eas(k_s) = eas_eq(k_s) 
-    eas(k_n) = eas_eq(k_n) 
-        !----------------------------------------
-    !> correct kappa_a,s,n
-    if((timeCurrent .ge. m1_tset) .and. (av_energy .ge. m1_E_atmo*100) ) then
-            if(eas_correction_standard) then
-              !
-                if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq. m1_i_nuebar) &
-                  .or. (speciesKSP == m1_i_mu) .or. (speciesKSP == m1_i_mubar)) then
-                   eas(k_a) = eas_eq(k_a) * max(1.0d0, T_nu/T_fluid)**2
-                   !TEST:   
-                   eas(k_s) = eas_eq(k_s) * max(1.0d0, T_nu/T_fluid)**2
-                   eas(k_n) = eas_eq(k_n) * max(1.0d0, T_nu/T_fluid)**2
-                   eas(Q_ems) = eas(Q_ems) * max(1.0d0, T_nu/T_fluid)**2
-                   eas(Q_ems_n) = eas(Q_ems_n) * max(1.0d0, T_nu/T_fluid)**2
-                else if(speciesKSP .eq. m1_i_nux) then
-                   eas(k_s) = eas_eq(k_s) * max(1.0d0, T_nu/T_fluid)**2      
-                end if
-            else if(eas_correction_Tnu) then
-               !
-                if(timeCurrent > 2.0 * m1_tset) then
-                   if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq.m1_i_nuebar) &
-                  .or. (speciesKSP == m1_i_mu) .or. (speciesKSP == m1_i_mubar)) then                
-                      eas(k_a) = eas_eq(k_a) * max(1.0d0, T_nu/T_fluid)**2
-                      eas(k_s) = eas_eq(k_s) * max(1.0d0, T_nu/T_fluid)**2
-                      eas(k_n) = eas_eq(k_n) * max(1.0d0, T_nu/T_fluid)**2
-                   else if(speciesKSP .eq. m1_i_nux) then
-                      eas(k_s) = eas_eq(k_s) * max(1.0d0, T_nu/T_fluid)**2    
-                   end if
-                else    
-                   if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq.m1_i_nuebar) &
-                  .or. (speciesKSP == m1_i_mu) .or. (speciesKSP == m1_i_mubar)) then
-                      eas(k_a) = eas_eq(k_a) * max(1.0d0, T_nu/T_fluid)
-                      eas(k_s) = eas_eq(k_s) * max(1.0d0, T_nu/T_fluid)
-                      eas(k_n) = eas_eq(k_n) * max(1.0d0, T_nu/T_fluid)
-                   else if(speciesKSP .eq. m1_i_nux) then
-                      eas(k_s) = eas_eq(k_s) * max(1.0d0, T_nu/T_fluid)       
-                   end if
-                end if 
-            else if(eas_correction_tanh) then
-              !
-                tanh_factor = (1.0 + tanh((T_nu/T_fluid - 1.0)*10.0d0))/2.0d0
-                if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq.m1_i_nuebar)&
-                  .or. (speciesKSP == m1_i_mu) .or. (speciesKSP == m1_i_mubar)) then
-                   eas(k_a) = eas_eq(k_a) * (1.0d0 + tanh_factor*(T_nu/T_fluid - 1.0d0)**2)
-                   eas(k_s) = eas_eq(k_s) * (1.0d0 + tanh_factor*(T_nu/T_fluid - 1.0d0)**2)
-                   eas(k_n) = eas_eq(k_n) * (1.0d0 + tanh_factor*(T_nu/T_fluid - 1.0d0)**2)
-                   eas(Q_ems) = eas(Q_ems) * (1.0d0 + tanh_factor*(T_nu/T_fluid - 1.0d0)**2)
-                   eas(Q_ems_n) = eas(Q_ems_n) * (1.0d0 + tanh_factor*(T_nu/T_fluid - 1.0d0)**2)
-                else if(speciesKSP .eq. m1_i_nux) then
-                   eas(k_s) = eas_eq(k_s) * (1.0d0 + tanh_factor*(T_nu/T_fluid - 1.0d0)**2)   
-                   eas(k_a) = eas_eq(k_a)
-                   eas(k_n) = eas_eq(k_n)    
-                end if
-            end if 
-    end if 
-    
-    ! ======================================================================
-    eas(Q_ems)   = max(eas(Q_ems),   1.0d-30)
+      Qems_tmp = 0.0d0
+      Qems_n_tmp = 0.0d0
+      if (speciesKSP == m1_i_nux .or. speciesKSP == m1_i_mu .or. speciesKSP == m1_i_mubar) then
+        if (plasmon_decay) then
+          call m1_eas_analytic_plasmon(speciesKSP,eta_rad,eta_e,ye_fluid,T_fluid,rho_fluid,eas,Qems,Qems_n)
+          Qems_tmp = Qems_tmp + Qems
+          Qems_n_tmp = Qems_n_tmp + Qems_n
+        endif
+        if (bremstrahlung) then
+          call m1_eas_analytic_brems(speciesKSP,eta_rad,ye_fluid,ymu_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
+          Qems_tmp = Qems_tmp + Qems
+          Qems_n_tmp = Qems_n_tmp + Qems_n
+        endif
+        if (pair_annihil) then
+          call m1_eas_analytic_pair(speciesKSP,eta_rad,eta_e,ye_fluid,T_fluid,rho_fluid,eas,Qems,Qems_n)
+          Qems_tmp = Qems_tmp + Qems
+          Qems_n_tmp = Qems_n_tmp + Qems_n
+        endif
+
+        kappa_a_tmp = 0.0d0
+        kappa_n_tmp = 0.0d0
+        if (ieee_is_finite(Qems_tmp) .and. Qems_tmp > 0.0d0) kappa_a_tmp = Qems_tmp / BB_e_mev
+        if (ieee_is_finite(Qems_n_tmp) .and. Qems_n_tmp > 0.0d0) kappa_n_tmp = Qems_n_tmp / BB_n_mev
+        if (ieee_is_finite(kappa_a_tmp) .and. kappa_a_tmp > 0.0d0) eas_eq(k_a) = eas_eq(k_a) + kappa_a_tmp / LENGTHGF
+        if (ieee_is_finite(kappa_n_tmp) .and. kappa_n_tmp > 0.0d0) eas_eq(k_n) = eas_eq(k_n) + kappa_n_tmp / LENGTHGF
+      endif
+
+      if (m1_use_muons .and. (speciesKSP == m1_i_mu .or. speciesKSP == m1_i_mubar)) then
+        if (rho_cgs < 1.0d10 .or. T_fluid < 2.5d0) then
+          eas_eq(k_a) = 1.0d-60
+          eas_eq(k_n) = 1.0d-60
+        endif
+      endif
+
+      Q_total_mev = eas_eq(k_a) * LENGTHGF * BB_e_mev
+      R_total_cgs = eas_eq(k_n) * LENGTHGF * BB_n_mev
+    else
+      kappa_a_cc = 0.0d0
+      kappa_n_cc = 0.0d0
+      if (beta_decay) then
+        if (speciesKSP == m1_i_nue) then
+          block_factor_n = 1.0d0 + exp(eta_e - fermi_dirac(eta_rad, 5) / max(fermi_dirac(eta_rad, 4), 1.0d-40))
+          zeta_cc = 0.0d0
+          if (eta_np > 0.0d0 .and. block_factor_n > 0.0d0 .and. ieee_is_finite(block_factor_n)) then
+            zeta_cc = eta_np * 0.25d0 * (1.0d0 + 3.0d0 * ALPHA**2) * SIGMA_0 / block_factor_n
+          endif
+          nfac = (T_fluid / 0.510998910d0)**2 * fermi_dirac(eta_rad, 4) / max(fermi_dirac(eta_rad, 2), 1.0d-40)
+          efac = (T_fluid / 0.510998910d0)**2 * fermi_dirac(eta_rad, 5) / max(fermi_dirac(eta_rad, 3), 1.0d-40)
+          kappa_n_cc = max(zeta_cc * nfac, 0.0d0)
+          kappa_a_cc = max(zeta_cc * efac, 0.0d0)
+        else if (speciesKSP == m1_i_nuebar) then
+          block_factor_p = 1.0d0 + exp(-eta_e - fermi_dirac(eta_rad, 5) / max(fermi_dirac(eta_rad, 4), 1.0d-40))
+          zeta_cc = 0.0d0
+          if (eta_pn > 0.0d0 .and. block_factor_p > 0.0d0 .and. ieee_is_finite(block_factor_p)) then
+            zeta_cc = eta_pn * 0.25d0 * (1.0d0 + 3.0d0 * ALPHA**2) * SIGMA_0 / block_factor_p
+          endif
+          nfac = (T_fluid / 0.510998910d0)**2 * fermi_dirac(eta_rad, 4) / max(fermi_dirac(eta_rad, 2), 1.0d-40)
+          efac = (T_fluid / 0.510998910d0)**2 * fermi_dirac(eta_rad, 5) / max(fermi_dirac(eta_rad, 3), 1.0d-40)
+          kappa_n_cc = max(zeta_cc * nfac, 0.0d0)
+          kappa_a_cc = max(zeta_cc * efac, 0.0d0)
+        endif
+      endif
+
+      if (.not. ieee_is_finite(kappa_a_cc) .or. kappa_a_cc <= 0.0d0) kappa_a_cc = 0.0d0
+      if (.not. ieee_is_finite(kappa_n_cc) .or. kappa_n_cc <= 0.0d0) kappa_n_cc = 0.0d0
+      eas_eq(k_a) = max(kappa_a_cc / LENGTHGF, 1.0d-60)
+      eas_eq(k_s) = max(kappa_s_nc / LENGTHGF, 1.0d-60)
+      eas_eq(k_n) = max(kappa_n_cc / LENGTHGF, 1.0d-60)
+
+      Qems_tmp = 0.0d0
+      Qems_n_tmp = 0.0d0
+      if (speciesKSP == m1_i_nux .or. speciesKSP == m1_i_mu .or. speciesKSP == m1_i_mubar) then
+        if (plasmon_decay) then
+          call m1_eas_analytic_plasmon(speciesKSP,eta_rad,eta_e,ye_fluid,T_fluid,rho_fluid,eas,Qems,Qems_n)
+          Qems_tmp = Qems_tmp + Qems
+          Qems_n_tmp = Qems_n_tmp + Qems_n
+        endif
+        if (bremstrahlung) then
+          call m1_eas_analytic_brems(speciesKSP,eta_rad,ye_fluid,ymu_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
+          Qems_tmp = Qems_tmp + Qems
+          Qems_n_tmp = Qems_n_tmp + Qems_n
+        endif
+        if (pair_annihil) then
+          call m1_eas_analytic_pair(speciesKSP,eta_rad,eta_e,ye_fluid,T_fluid,rho_fluid,eas,Qems,Qems_n)
+          Qems_tmp = Qems_tmp + Qems
+          Qems_n_tmp = Qems_n_tmp + Qems_n
+        endif
+
+        kappa_a_tmp = 0.0d0
+        kappa_n_tmp = 0.0d0
+        if (ieee_is_finite(Qems_tmp) .and. Qems_tmp > 0.0d0) kappa_a_tmp = Qems_tmp / BB_e_mev
+        if (ieee_is_finite(Qems_n_tmp) .and. Qems_n_tmp > 0.0d0) kappa_n_tmp = Qems_n_tmp / BB_n_mev
+        if (ieee_is_finite(kappa_a_tmp) .and. kappa_a_tmp > 0.0d0) eas_eq(k_a) = eas_eq(k_a) + kappa_a_tmp / LENGTHGF
+        if (ieee_is_finite(kappa_n_tmp) .and. kappa_n_tmp > 0.0d0) eas_eq(k_n) = eas_eq(k_n) + kappa_n_tmp / LENGTHGF
+      endif
+
+      Q_total_mev = eas_eq(k_a) * LENGTHGF * BB_e_mev
+      R_total_cgs = eas_eq(k_n) * LENGTHGF * BB_n_mev
+    endif
+
+    if (.not. ieee_is_finite(Q_total_mev) .or. Q_total_mev <= 0.0d0) Q_total_mev = 1.0d-60
+    if (.not. ieee_is_finite(R_total_cgs) .or. R_total_cgs <= 0.0d0) R_total_cgs = 1.0d-60
+
+    eas(k_a) = max(eas_eq(k_a), 1.0d-60)
+    eas(k_s) = max(eas_eq(k_s), 1.0d-60)
+    eas(k_n) = max(eas_eq(k_n), 1.0d-60)
+    eas(Q_ems) = max(Q_total_mev * MEV_TO_ERG_KEN * RHOGF * EPSGF / TIMEGF, 1.0d-30)
+    eas(Q_ems_n) = max(R_total_cgs * MNUC_CGS * RHOGF / TIMEGF, 1.0d-30)
+
+    eas_correction_standard = .true.
+    eas_correction_Tnu = .false.
+    eas_correction_tanh = .false.
+    if((timeCurrent .ge. m1_tset) .and. (av_energy .ge. m1_E_atmo * 100.0d0)) then
+      Tnu_ratio = max(1.0d0, T_nu / max(T_fluid, 1.0d-12))
+      if(eas_correction_standard) then
+        if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq. m1_i_nuebar) .or. &
+             (speciesKSP .eq. m1_i_mu) .or. (speciesKSP .eq. m1_i_mubar)) then
+          eas(k_a) = eas(k_a) * Tnu_ratio**2
+          eas(k_s) = eas(k_s) * Tnu_ratio**2
+          eas(k_n) = eas(k_n) * Tnu_ratio**2
+          eas(Q_ems) = eas(Q_ems) * Tnu_ratio**2
+          eas(Q_ems_n) = eas(Q_ems_n) * Tnu_ratio**2
+        else if(speciesKSP .eq. m1_i_nux) then
+          eas(k_s) = eas(k_s) * Tnu_ratio**2
+        endif
+      else if(eas_correction_Tnu) then
+        if(timeCurrent > 2.0d0 * m1_tset) then
+          if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq. m1_i_nuebar) .or. &
+               (speciesKSP .eq. m1_i_mu) .or. (speciesKSP .eq. m1_i_mubar)) then
+            eas(k_a) = eas(k_a) * Tnu_ratio**2
+            eas(k_s) = eas(k_s) * Tnu_ratio**2
+            eas(k_n) = eas(k_n) * Tnu_ratio**2
+          else if(speciesKSP .eq. m1_i_nux) then
+            eas(k_s) = eas(k_s) * Tnu_ratio**2
+          endif
+        else
+          if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq. m1_i_nuebar) .or. &
+               (speciesKSP .eq. m1_i_mu) .or. (speciesKSP .eq. m1_i_mubar)) then
+            eas(k_a) = eas(k_a) * Tnu_ratio
+            eas(k_s) = eas(k_s) * Tnu_ratio
+            eas(k_n) = eas(k_n) * Tnu_ratio
+          else if(speciesKSP .eq. m1_i_nux) then
+            eas(k_s) = eas(k_s) * Tnu_ratio
+          endif
+        endif
+      else if(eas_correction_tanh) then
+        tanh_factor = (1.0d0 + tanh((T_nu / max(T_fluid, 1.0d-12) - 1.0d0) * 10.0d0)) / 2.0d0
+        if((speciesKSP .eq. m1_i_nue) .or. (speciesKSP .eq. m1_i_nuebar) .or. &
+             (speciesKSP .eq. m1_i_mu) .or. (speciesKSP .eq. m1_i_mubar)) then
+          eas(k_a) = eas(k_a) * (1.0d0 + tanh_factor * (T_nu / max(T_fluid, 1.0d-12) - 1.0d0)**2)
+          eas(k_s) = eas(k_s) * (1.0d0 + tanh_factor * (T_nu / max(T_fluid, 1.0d-12) - 1.0d0)**2)
+          eas(k_n) = eas(k_n) * (1.0d0 + tanh_factor * (T_nu / max(T_fluid, 1.0d-12) - 1.0d0)**2)
+          eas(Q_ems) = eas(Q_ems) * (1.0d0 + tanh_factor * (T_nu / max(T_fluid, 1.0d-12) - 1.0d0)**2)
+          eas(Q_ems_n) = eas(Q_ems_n) * (1.0d0 + tanh_factor * (T_nu / max(T_fluid, 1.0d-12) - 1.0d0)**2)
+        else if(speciesKSP .eq. m1_i_nux) then
+          eas(k_s) = eas(k_s) * (1.0d0 + tanh_factor * (T_nu / max(T_fluid, 1.0d-12) - 1.0d0)**2)
+        endif
+      endif
+    endif
+
+    eas(Q_ems) = max(eas(Q_ems), 1.0d-30)
     eas(Q_ems_n) = max(eas(Q_ems_n), 1.0d-30)
-    eas(k_a)     = max(eas(k_a),     1.0d-30)
-    eas(k_s)     = max(eas(k_s),     1.0d-30)
-    eas(k_n)     = max(eas(k_n),     1.0d-30)
-    
+    eas(k_a) = max(eas(k_a), 1.0d-30)
+    eas(k_s) = max(eas(k_s), 1.0d-30)
+    eas(k_n) = max(eas(k_n), 1.0d-30)
+
   end subroutine calculate_m1_eas_ixD
 
   !/**************************************/
@@ -623,8 +736,8 @@ subroutine m1_eas_analytic_brems(speciesKSP,eta_nu,ye_fluid,ymu_fluid,T_fluid,rh
   double precision :: rho_cgs, T_mev
 
   ! Calculate neutron and proton fractions
-  Y_p = ye_fluid + ymu_fluid
-  Y_n = 1.0d0 - Y_p
+  Y_p = min(max(ye_fluid + ymu_fluid, 0.0d0), 1.0d0)
+  Y_n = max(0.0d0, 1.0d0 - Y_p)
 
   Qems = 0.0d0
   Qems_n = 0.0d0
@@ -859,14 +972,8 @@ subroutine m1_eas_analytic_plasmon(speciesKSP,eta_nu,eta_e,ye_fluid,T_fluid,rho_
   ! gamma_const = pi^3 * sigma_0 * c / (me^2 * 3 * fsc * (hc)^6) * 
   !               gamma^6 * exp(-gamma) * (1+gamma) * T^8
   gamma_const = PI**3 * SIGMA_0 * CLITE_CM / &
-                (ME_MEV**2 * 3.0d0 * FSC * HC_MEVCM) * &
+                (ME_MEV**2 * 3.0d0 * FSC * HC_MEVCM**6) * &
                 gamma**6 * exp(-gamma) * (1.0d0 + gamma) * T_mev**8
-  
-  gamma_const = gamma_const / HC_MEVCM**1
-  gamma_const = gamma_const / HC_MEVCM**1
-  gamma_const = gamma_const / HC_MEVCM**1
-  gamma_const = gamma_const / HC_MEVCM**1
-  gamma_const = gamma_const / HC_MEVCM**1
 
   
   ! Calculate blocking factor for heavy leptons (nux)
@@ -883,12 +990,11 @@ subroutine m1_eas_analytic_plasmon(speciesKSP,eta_nu,eta_e,ye_fluid,T_fluid,rho_
   ! ================================================================
   if (m1_use_muons) then
     ! 5-species case
-    ! KEN: Use pair-process style blocking factors for muons
-    block_factor_numu = 1.0d0 + exp(eta_nu - 0.5d0 * &
-                        (FDRp + FDRm))
+    block_factor_numu = 1.0d0 + exp(eta_nu - &
+                        (1.0d0 + 0.5d0 * gamma**2 / (1.0d0 + gamma)))
     
-    block_factor_numubar = 1.0d0 + exp(-eta_nu - 0.5d0 * &
-                           (FDRp + FDRm))
+    block_factor_numubar = 1.0d0 + exp(-eta_nu - &
+                           (1.0d0 + 0.5d0 * gamma**2 / (1.0d0 + gamma)))
     
     ! R_gamma for numu and numubar
     R_gamma_numu = (Cv - 1.0d0)**2 * gamma_const / &

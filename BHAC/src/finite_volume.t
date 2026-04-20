@@ -59,6 +59,7 @@ logical          :: fattening = .False.
 double precision :: M1_mini = 1.d-45
 ! workspace for safe reconstruction normalization
 double precision :: Eden(ixI^S), EdenLp(ixI^S), EdenRp(ixI^S)
+double precision :: sqrtgDen(ixI^S), sqrtgDenLp(ixI^S), sqrtgDenRp(ixI^S)
 !integer :: ix^D
 }
 !-----------------------------------------------------------------------------
@@ -84,27 +85,42 @@ double precision :: Eden(ixI^S), EdenLp(ixI^S), EdenRp(ixI^S)
     !KEN Additionaly metricM1=metricM1_L
    }
    {^KSP&
+     call m1_enforce_realizability(metricM1,w,ixI^L,ixI^L,^KSP)
+     call m1_enforce_realizability(metricM1_L,wLp,ixI^L,ixL^L,^KSP)
+     call m1_enforce_realizability(metricM1_R,wRp,ixI^L,ixR^L,^KSP)
+     sqrtgDen(ixI^S) = metricM1%sqrtg(ixI^S)
+     where ((sqrtgDen(ixI^S) .le. M1_mini) .or. (sqrtgDen(ixI^S) /= sqrtgDen(ixI^S)))
+       sqrtgDen(ixI^S) = 1.0d0
+     end where
+     sqrtgDenLp(ixL^S) = metricM1_L%sqrtg(ixL^S)
+     where ((sqrtgDenLp(ixL^S) .le. M1_mini) .or. (sqrtgDenLp(ixL^S) /= sqrtgDenLp(ixL^S)))
+       sqrtgDenLp(ixL^S) = 1.0d0
+     end where
+     sqrtgDenRp(ixR^S) = metricM1_R%sqrtg(ixR^S)
+     where ((sqrtgDenRp(ixR^S) .le. M1_mini) .or. (sqrtgDenRp(ixR^S) /= sqrtgDenRp(ixR^S)))
+       sqrtgDenRp(ixR^S) = 1.0d0
+     end where
      ! Work with metric-free radiation moments for reconstruction:
      !   Erad_hat = Erad / sqrt(g)
      !   N_over_E = (Nrad / sqrt(g)) / (Erad_hat + mini)
      !   F_over_E = (Frad / sqrt(g)) / (Erad_hat + mini)
-     Eden(ixI^S) = max((w(ixI^S,erad^KSP_)) / metricM1%sqrtg(ixI^S), m1_E_atmo)
+     Eden(ixI^S) = max((w(ixI^S,erad^KSP_)) / sqrtgDen(ixI^S), m1_E_atmo)
      w(ixI^S,erad^KSP_) = max(Eden(ixI^S), m1_E_atmo)
      Eden(ixI^S) = Eden(ixI^S) + M1_mini
-     w(ixI^S,nrad^KSP_) = w(ixI^S,nrad^KSP_) / metricM1%sqrtg(ixI^S) / Eden(ixI^S)
-     {^C& w(ixI^S,frad^KSP^C_) = w(ixI^S,frad^KSP^C_) / metricM1%sqrtg(ixI^S) / Eden(ixI^S) \}
+     w(ixI^S,nrad^KSP_) = w(ixI^S,nrad^KSP_) / sqrtgDen(ixI^S) / Eden(ixI^S)
+     {^C& w(ixI^S,frad^KSP^C_) = w(ixI^S,frad^KSP^C_) / sqrtgDen(ixI^S) / Eden(ixI^S) \}
 
-     EdenLp(ixL^S) = max((wLp(ixL^S,erad^KSP_)) / metricM1_L%sqrtg(ixL^S), m1_E_atmo)
+     EdenLp(ixL^S) = max((wLp(ixL^S,erad^KSP_)) / sqrtgDenLp(ixL^S), m1_E_atmo)
      wLp(ixL^S,erad^KSP_) = max(EdenLp(ixL^S), m1_E_atmo)
      EdenLp(ixL^S) = EdenLp(ixL^S) + M1_mini
-     wLp(ixL^S,nrad^KSP_) = wLp(ixL^S,nrad^KSP_) / metricM1_L%sqrtg(ixL^S) / EdenLp(ixL^S)
-     {^C& wLp(ixL^S,frad^KSP^C_) = wLp(ixL^S,frad^KSP^C_) / metricM1_L%sqrtg(ixL^S) / EdenLp(ixL^S) \}
+     wLp(ixL^S,nrad^KSP_) = wLp(ixL^S,nrad^KSP_) / sqrtgDenLp(ixL^S) / EdenLp(ixL^S)
+     {^C& wLp(ixL^S,frad^KSP^C_) = wLp(ixL^S,frad^KSP^C_) / sqrtgDenLp(ixL^S) / EdenLp(ixL^S) \}
 
-     EdenRp(ixR^S) = max((wRp(ixR^S,erad^KSP_)) / metricM1_R%sqrtg(ixR^S), m1_E_atmo)
+     EdenRp(ixR^S) = max((wRp(ixR^S,erad^KSP_)) / sqrtgDenRp(ixR^S), m1_E_atmo)
      wRp(ixR^S,erad^KSP_) = max(EdenRp(ixR^S), m1_E_atmo)
      EdenRp(ixR^S) = EdenRp(ixR^S) + M1_mini
-     wRp(ixR^S,nrad^KSP_) = wRp(ixR^S,nrad^KSP_) / metricM1_R%sqrtg(ixR^S) / EdenRp(ixR^S)
-     {^C& wRp(ixR^S,frad^KSP^C_) = wRp(ixR^S,frad^KSP^C_) / metricM1_R%sqrtg(ixR^S) / EdenRp(ixR^S) \}
+     wRp(ixR^S,nrad^KSP_) = wRp(ixR^S,nrad^KSP_) / sqrtgDenRp(ixR^S) / EdenRp(ixR^S)
+     {^C& wRp(ixR^S,frad^KSP^C_) = wRp(ixR^S,frad^KSP^C_) / sqrtgDenRp(ixR^S) / EdenRp(ixR^S) \}
 
    \}  
    ! now wLp,wRp is : nGamma/E, E, F_i/E   
@@ -243,17 +259,8 @@ if (typelimiter == limiter_ppm .and. PPM_flatten) &
       {^C& wRp(ixR^S,frad^KSP^C_) = wRp(ixR^S,frad^KSP^C_) * metricM1_R%sqrtg(ixR^S) * EdenRp(ixR^S) \}
       wRp(ixR^S,erad^KSP_) = wRp(ixR^S,erad^KSP_) * metricM1_R%sqrtg(ixR^S)
 
-      where ((wLp(ixL^S, erad^KSP_) < m1_E_atmo) .or. (wLp(ixL^S, nrad^KSP_) < m1_N_atmo))
-        wLp(ixL^S, erad^KSP_) = m1_E_atmo
-        wLp(ixL^S, nrad^KSP_) = m1_N_atmo
-        {^C& wLp(ixL^S, frad^KSP^C_) = 0.0d0 \}
-      end where
-
-      where (wRp(ixR^S, erad^KSP_) < m1_E_atmo .or. wRp(ixR^S, nrad^KSP_) < m1_N_atmo)
-        wRp(ixR^S, erad^KSP_) = m1_E_atmo
-        wRp(ixR^S, nrad^KSP_) = m1_N_atmo
-        {^C& wRp(ixR^S, frad^KSP^C_) = 0.0d0 \}
-      end where
+      call m1_enforce_realizability(metricM1_L,wLp,ixI^L,ixL^L,^KSP)
+      call m1_enforce_realizability(metricM1_R,wRp,ixI^L,ixR^L,^KSP)
 
     \}  
     ! now wLp,wRp is : n*Gamma*sqrtg, E*sqrtg, F_i*sqrtg  
@@ -803,6 +810,12 @@ do idims= idim^LIM
 
 end do ! Next idims
 
+{#IFDEF M1
+  {^KSP&
+  call m1_enforce_realizability(metricM1,wnew,ixI^L,ixO^L,^KSP)
+  \}
+}
+
 
 
 {#IFDEF STAGGERED
@@ -846,6 +859,12 @@ end if
 
 call addsource2(qdt*dble(idimmax-idimmin+1)/dble(ndim),ixI^L,ixO^L,1,nw,qtC,&
                 wCT,qt,wnew,x,.false.)
+
+{#IFDEF M1
+  {^KSP&
+  call m1_enforce_realizability(metricM1,wnew,ixI^L,ixO^L,^KSP)
+  \}
+}
 
 if (PP_limiter) then
    deallocate(fC_low)

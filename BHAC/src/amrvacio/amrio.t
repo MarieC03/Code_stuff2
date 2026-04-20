@@ -234,6 +234,8 @@ use mod_eos_hybrid
 use mod_eos_polytrope
 use mod_eos
 use mod_variables
+use mod_m1_eas_param, only: m1_rates_Weakhub, m1_rates_analytical, beta_decay, &
+                             plasmon_decay, bremstrahlung, pair_annihil
 use mod_weakhub_parameters, only: Weakhub_grey_method
 include 'amrvacdef.f'
 
@@ -320,7 +322,9 @@ namelist /m1list/  fileWeakhub, m1_closure_type, m1_actual_speeds, m1_radice_spe
                     m1_frad_A2_A, m1_frad_A2_A3, m1_erad_LLF, m1_frad_LLF, M1_FLUID_BACKREACT, &
                     m1_use_neutrinos, m1_use_muons, m1_use_photons, m1_use_5_species, m1_2_eas_updates, &
                     TESTqtC, m1_E_atmo, &
-                    m1_N_atmo, m1_tset, m1_tset_backreact, m1_rho_floor, Weakhub_grey_method
+                    m1_N_atmo, m1_tset, m1_tset_backreact, m1_rho_floor, Weakhub_grey_method, &
+                    m1_rates_Weakhub, m1_rates_analytical, beta_decay, plasmon_decay, &
+                    bremstrahlung, pair_annihil
 
 ! m1_i_nue, m1_i_nuebar, m1_i_nux, m1_i_mu, m1_i_mubar, m1_i_photon
 !----------------------------------------------------------------------------
@@ -580,6 +584,12 @@ m1_use_neutrinos = .true.
 m1_use_muons = .false.
 m1_use_photons = .false.
 m1_use_5_species = .false.
+m1_rates_Weakhub = .true.
+m1_rates_analytical = .false.
+beta_decay = .true.
+plasmon_decay = .true.
+bremstrahlung = .true.
+pair_annihil = .true.
 TESTqtC = 1.0d+10
 m1_2_eas_updates = .true.
 m1_E_atmo = 1.0d-15
@@ -1209,7 +1219,25 @@ if (m1_use_muons .and. .not. lep_use_muons) then
    call mpistop('m1_use_muons = .true. requires lep_use_muons = .true. in eoslist')
 endif
 
-if (Weakhub_grey_method .ne. 1) then
+if (m1_use_neutrinos) then
+   if (m1_rates_Weakhub .eqv. m1_rates_analytical) then
+      call mpistop('Choose exactly one neutrino-rate mode: m1_rates_Weakhub xor m1_rates_analytical')
+   endif
+endif
+
+if (m1_use_neutrinos .and. .not. eos_uses_ye()) then
+   call mpistop('Microphysical neutrino M1 needs a Ye-dependent EOS (tabulated or leptonic)')
+endif
+
+if (m1_rates_analytical .and. m1_use_muons) then
+   call mpistop('Analytical M1 rates are only supported for 3 neutrino species; use Weakhub for 5 species')
+endif
+
+if (m1_rates_analytical .and. m1_use_5_species) then
+   call mpistop('m1_use_5_species = .true. requires m1_rates_Weakhub = .true.')
+endif
+
+if (m1_rates_Weakhub .and. Weakhub_grey_method .ne. 1) then
    call mpistop('Active BHAC M1 Weakhub path currently supports only Weakhub_grey_method = 1')
 endif
 }
@@ -1224,6 +1252,8 @@ if (mype==0) then
    print*,'Filenameout         : ', trim(filenameout)
    print*,'Converting?         : ', convert
    print*,'m1_use_5_species    : ', m1_use_5_species
+   print*,'m1_rates_Weakhub    : ', m1_rates_Weakhub
+   print*,'m1_rates_analytical : ', m1_rates_analytical
    print*,'Weakhub_grey_method : ', Weakhub_grey_method
    print*,'                                                                '
 endif

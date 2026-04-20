@@ -49,7 +49,7 @@ PPFLAGS += -z=$(z) -p=$(PHYSICS) -nf=$(nf)
 PPFLAGS += -ndust=$(ndust)
 PPFLAGS += -eos=$(eos)
 PPFLAGS += -coord=$(coord)
-PPFLAGS += -nspecies=3
+PPFLAGS += -nspecies=5
 
 # For the compilation rules:
 VACPP =$(BHAC_DIR)/src/vacpp.pl #
