@@ -247,8 +247,9 @@ module mod_cfc
              ! call conformal_transformation(ixG^LL, ixG^LL, pw(igrid)%w(ixG^T,1:nw), px(igrid)%x(ixG^T,1:ndim))
           if (.not. fix_prim_init) then
               pw(igrid)%w(ixG^T,D_)   = 0.0d0
-              if (eos_type == tabulated) pw(igrid)%w(ixG^T,Dye_) = 0.0d0
-               pw(igrid)%w(ixG^T,tau_) = 0.0d0
+              if (eos_uses_ye()) pw(igrid)%w(ixG^T,Dye_) = 0.0d0
+              if (eos_has_ymu()) pw(igrid)%w(ixG^T,Dymu_) = 0.0d0
+              pw(igrid)%w(ixG^T,tau_) = 0.0d0
           {^C& pw(igrid)%w(ixG^T,S^C_) = 0.0d0 \}
               ! me B-field test:
            !{C pw(igrid)%w(ixG^T,b^C_) = 0.0d0 }
@@ -567,7 +568,8 @@ module mod_cfc
 
           ! do p2c
           pw(igrid)%w(ixG^T,D_)       = 0.0d0
-          if (eos_type == tabulated) pw(igrid)%w(ixG^T,Dye_)     = 0.0d0
+          if (eos_uses_ye()) pw(igrid)%w(ixG^T,Dye_)     = 0.0d0
+          if (eos_has_ymu()) pw(igrid)%w(ixG^T,Dymu_)    = 0.0d0
           pw(igrid)%w(ixG^T,tau_)     = 0.0d0
           {^C& pw(igrid)%w(ixG^T,S^C_) = 0.0d0 \}
           !me test Bfield:
@@ -695,7 +697,8 @@ module mod_cfc
           pw(igrid)%w(ixG^T,tau_) = pwold(igrid)%w(ixG^T,tau_)
      {^C& pw(igrid)%w(ixG^T,S^C_) = pwold(igrid)%w(ixG^T,S^C_) \}
      {^C& pw(igrid)%w(ixG^T,b^C_) = pwold(igrid)%w(ixG^T,b^C_) \}
-          if (eos_type == tabulated) pw(igrid)%w(ixG^T,Dye_) = pwold(igrid)%w(ixG^T,Dye_)
+          if (eos_uses_ye()) pw(igrid)%w(ixG^T,Dye_) = pwold(igrid)%w(ixG^T,Dye_)
+          if (eos_has_ymu()) pw(igrid)%w(ixG^T,Dymu_) = pwold(igrid)%w(ixG^T,Dymu_)
           {#IFDEF M1
           {^KSP&         
           {#IFNDEF VAR1
@@ -878,7 +881,8 @@ module mod_cfc
 
        pw1(igrid)%w(ixG^T,psi_metric_) = pw(igrid)%w(ixG^T,psi_metric_)
        pw1(igrid)%w(ixG^T,D_)          = pw(igrid)%w(ixG^T,D_)
-       if (eos_type == tabulated) pw1(igrid)%w(ixG^T,Dye_)        = pw(igrid)%w(ixG^T,Dye_)
+       if (eos_uses_ye()) pw1(igrid)%w(ixG^T,Dye_)        = pw(igrid)%w(ixG^T,Dye_)
+       if (eos_has_ymu()) pw1(igrid)%w(ixG^T,Dymu_)       = pw(igrid)%w(ixG^T,Dymu_)
        pw1(igrid)%w(ixG^T,tau_)        = pw(igrid)%w(ixG^T,tau_)
   {^C& pw1(igrid)%w(ixG^T,S^C_)        = pw(igrid)%w(ixG^T,S^C_) \}
   {^C& pw1(igrid)%w(ixG^T,b^C_)        = pw(igrid)%w(ixG^T,b^C_) \}
@@ -963,7 +967,8 @@ module mod_cfc
     !$OMP PARALLEL DO PRIVATE(igrid)
     do iigrid=1,igridstail; igrid=igrids(iigrid);
        pw(igrid)%w(ixG^T,D_)    = pw1(igrid)%w(ixG^T,D_)   * pw1(igrid)%w(ixG^T,psi_metric_)**6
-       if (eos_type == tabulated) pw(igrid)%w(ixG^T,Dye_)  = pw1(igrid)%w(ixG^T,Dye_) * pw1(igrid)%w(ixG^T,psi_metric_)**6
+       if (eos_uses_ye()) pw(igrid)%w(ixG^T,Dye_)  = pw1(igrid)%w(ixG^T,Dye_) * pw1(igrid)%w(ixG^T,psi_metric_)**6
+       if (eos_has_ymu()) pw(igrid)%w(ixG^T,Dymu_) = pw1(igrid)%w(ixG^T,Dymu_) * pw1(igrid)%w(ixG^T,psi_metric_)**6
        pw(igrid)%w(ixG^T,tau_)  = pw1(igrid)%w(ixG^T,tau_) * pw1(igrid)%w(ixG^T,psi_metric_)**6
   {^C& pw(igrid)%w(ixG^T,S^C_)  = pw1(igrid)%w(ixG^T,S^C_) * pw1(igrid)%w(ixG^T,psi_metric_)**6 \}
   {^C& pw(igrid)%w(ixG^T,b^C_)  = pw1(igrid)%w(ixG^T,b^C_) * pw1(igrid)%w(ixG^T,psi_metric_)**6 \}
@@ -1107,5 +1112,4 @@ module mod_cfc
   end subroutine cfc_get_Aij_grid
 
 end module mod_cfc
-
 

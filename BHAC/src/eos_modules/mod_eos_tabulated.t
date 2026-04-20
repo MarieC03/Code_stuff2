@@ -65,7 +65,7 @@ contains
   end subroutine eos_tabulated_activate
 
   !> Get Pressure based on rho, eps, ye 
-  subroutine tabulated_get_pressure_one_grid(prs,rho,eps,temp,ye)
+  subroutine tabulated_get_pressure_one_grid(prs,rho,eps,temp,ye,ymu)
     use mod_eos_interpolation
     
     double precision, intent(inout) :: prs
@@ -73,6 +73,7 @@ contains
     double precision, intent(in)    :: eps
     double precision, intent(inout), optional :: temp
     double precision, intent(in), optional    :: ye
+    double precision, intent(in), optional    :: ymu
 
     double precision                :: log_rho, log_temp, log_eps, temp_in, eps_max, eps_min
     double precision                :: pnu(1:3)
@@ -134,14 +135,14 @@ contains
   end subroutine tabulated_get_pressure_one_grid
 
   !> Get specific internal energy from (rho, temp, ye)
-  subroutine tabulated_get_eps_one_grid(prs,rho,eps,temp,ye)
+  subroutine tabulated_get_eps_one_grid(prs,rho,eps,temp,ye,ymu)
     !use mod_eos
     use mod_eos_interpolation
 
     
     double precision, intent(in) :: prs
     double precision, intent(in) :: rho
-    double precision, intent(in), optional :: temp, ye
+    double precision, intent(in), optional :: temp, ye, ymu
     double precision, intent(inout) :: eps
 
     double precision             :: log_rho, log_temp
@@ -176,7 +177,7 @@ contains
   end subroutine tabulated_get_eps_one_grid
 
   !> Get cs2 from (rho, eps, ye)
-  subroutine tabulated_get_cs2_one_grid(cs2,rho,eps,temp,ye)
+  subroutine tabulated_get_cs2_one_grid(cs2,rho,eps,temp,ye,ymu)
     !use mod_eos
     use mod_eos_interpolation
     
@@ -184,6 +185,7 @@ contains
     double precision, intent(in) :: rho
     double precision, intent(in) :: eps
     double precision, intent(in), optional :: ye
+    double precision, intent(in), optional :: ymu
     double precision, intent(inout), optional :: temp
     double precision             :: log_rho, log_eps, log_temp, temp_in, eps_max, eps_min
 
@@ -242,13 +244,14 @@ contains
   end subroutine tabulated_get_cs2_one_grid
 
   !> Get Temperature from (rho, eps, ye)
-  subroutine tabulated_get_temp_one_grid(rho,eps,temp,ye)
+  subroutine tabulated_get_temp_one_grid(rho,eps,temp,ye,ymu)
     !use mod_eos
     use mod_eos_interpolation
 
     
     double precision, intent(in)    :: rho, ye
     double precision, intent(inout) :: temp, eps
+    double precision, intent(in), optional :: ymu
 
     double precision                :: log_rho, log_temp, log_eps, eps_min, eps_max
 
@@ -299,13 +302,14 @@ contains
 
   !> Get all tab eos var from (rho, eps, ye)
   subroutine tabulated_eps_get_all_one_grid(rho,eps,ye,temp,prs,ent,cs2,dedt,&
-                 dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu)
+                 dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu,ymu)
     use mod_eos_interpolation
 
     double precision, intent(inout) :: rho, eps, ye
     double precision, intent(inout), optional :: ent, prs, temp, cs2, dedt
     double precision, intent(inout), optional :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar
-    double precision, intent(inout), optional :: mu_e,mu_n,mu_p,muhat,munu
+    double precision, intent(inout), optional :: mu_e,mu_n,mu_p,mu_mu,muhat,munu
+    double precision, intent(in), optional :: ymu
 
     double precision             :: log_rho, log_temp, log_eps, temp_in
     double precision             :: pnu(1:3), epsnu(1:3)
@@ -406,6 +410,7 @@ contains
     if (present(mu_e))     mu_e    = ffx(i_mu_e)
     if (present(mu_p))     mu_p    = ffx(i_mu_p)
     if (present(mu_n))     mu_n    = ffx(i_mu_n)
+    if (present(mu_mu))    mu_mu   = 0.0d0
 
     if (use_realistic_mp_table) then
       if (present(ent))      ent  = ffx(i_entropy)
@@ -428,14 +433,15 @@ contains
 
   !> Get all eos tab var from (rho, temp, ye)
   subroutine tabulated_temp_get_all_one_grid(rho,temp,ye,eps,prs,ent,cs2,dedt,&
-                       dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu)
+                       dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu,ymu)
     use mod_eos_interpolation
 
     double precision, intent(in)    :: ye
     double precision, intent(inout) :: eps, rho, temp
     double precision, intent(inout), optional :: ent, prs, cs2, dedt
     double precision, intent(inout), optional :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar
-    double precision, intent(inout), optional :: mu_e,mu_n,mu_p,muhat,munu
+    double precision, intent(inout), optional :: mu_e,mu_n,mu_p,mu_mu,muhat,munu
+    double precision, intent(in), optional :: ymu
 
     double precision             :: log_rho, log_temp, log_eps
     double precision             :: ffx(nvars)
@@ -488,6 +494,7 @@ contains
     if (present(mu_e))     mu_e    = ffx(i_mu_e)
     if (present(mu_p))     mu_p    = ffx(i_mu_p)
     if (present(mu_n))     mu_n    = ffx(i_mu_n)
+    if (present(mu_mu))    mu_mu   = 0.0d0
 
     if (use_realistic_mp_table) then
       if (present(ent))      ent  = ffx(i_entropy)
@@ -508,11 +515,12 @@ contains
     endif
   end subroutine tabulated_temp_get_all_one_grid
 
-  subroutine tabulated_get_eps_range(rho, eps_min, eps_max, ye)
+  subroutine tabulated_get_eps_range(rho, eps_min, eps_max, ye, ymu)
     use mod_eos_interpolation
 
     double precision, intent(in) :: rho
     double precision, intent(in), optional :: ye
+    double precision, intent(in), optional :: ymu
     double precision, intent(out) :: eps_max, eps_min
     double precision              :: log_rho, log_temp, eps
 
@@ -845,7 +853,7 @@ contains
   ! Beta equilibrium requires that \mu_n =  \mu_p +\mu_e
   ! Since we assume that (rest mass difference)/T between n and p should be negligible we demand
   ! \mu_n-\mu_p-\mu_e = \mu_hat =0
-  subroutine tabulated_get_all_beta_eqm_one_grid(rho,temp,ye,eps,prs)
+  subroutine tabulated_get_all_beta_eqm_one_grid(rho,temp,ye,eps,prs,ymu)
     use mod_eos_interpolation
     use mod_rootfinding
     !use mod_eos_tabulated_parameters
@@ -853,6 +861,9 @@ contains
     double precision, intent(in)              :: rho, temp
     double precision, intent(inout)           :: ye
     double precision, intent(inout), optional :: eps, prs
+    double precision, intent(inout), optional :: ymu
+
+    if (present(ymu)) ymu = eos_ymumin
 
     double precision, save                    :: log_rho, log_temp
     double precision                          :: log_eps, ye_min, ye_max, log_prs

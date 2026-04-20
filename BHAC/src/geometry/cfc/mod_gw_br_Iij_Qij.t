@@ -45,7 +45,7 @@ module mod_gw_br_Iij_Qij
     call imhd_get_intermediate_variables(ixI^L, ixI^L, w, x, b2=b2(ixI^S), htot=htot(ixI^S))
 
     {do ix^D = ixI^LIM^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           rho_st = sigma(ix^D)
           !rho_st = w(ix^D, psi_metric_)**6 * w(ix^D, D_)
           rho = w(ix^D, rho_)
@@ -64,7 +64,12 @@ module mod_gw_br_Iij_Qij
             ! Blanchet 1990, h is enthaply - rest mass
             htot(ix^D) = htot(ix^D) - 1.0d0
           else
-            call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),w(ix^D,ye_),eps_tmp,prs=prs_st(ix^D))
+            if (eos_has_ymu()) then
+              call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),w(ix^D,ye_),eps_tmp, &
+                                             prs=prs_st(ix^D),ymu=w(ix^D,ymu_))
+            else
+              call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),w(ix^D,ye_),eps_tmp,prs=prs_st(ix^D))
+            endif
             !Temp(ix^D) = Temp(ix^D) * mev_gf
             !! htot_st:
             htot(ix^D) = eps_tmp + (prs_st(ix^D) + b2(ix^D)) / rho_st 
@@ -343,8 +348,13 @@ module mod_gw_br_Iij_Qij
         D_st_old = w_old(ix^D,1)
 
         ! eps should be same definition when B-field is presented
-        if (eos_type == tabulated) then
-          call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+        if (eos_uses_ye()) then
+          if (eos_has_ymu()) then
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_), &
+                                      ymu=w(ix^D,ymu_))
+          else
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+          endif
         else
           eps = w(ix^D, T_eps_)
         endif
@@ -547,9 +557,14 @@ D_st_dot = 0.0d0
 
         U = U_st(ix^D)
         ! eps should be same definition when B-field is presented
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           ! using rho* to get eps
-          call eos_get_eps_one_grid(dummy,D_st,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+          if (eos_has_ymu()) then
+            call eos_get_eps_one_grid(dummy,D_st,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_), &
+                                      ymu=w(ix^D,ymu_))
+          else
+            call eos_get_eps_one_grid(dummy,D_st,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+          endif
           !call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
         else
           !call eos_get_eps_one_grid(dummy,D_st,eps)
@@ -693,8 +708,13 @@ bracket_dot = 0.0d0
         U = 2.0d0 * (psi(ix^D) - 1.0d0)
         rho      = w(ix^D, rho_)
         ! eps should be same definition when B-field is presented
-        if (eos_type == tabulated) then
-          call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+        if (eos_uses_ye()) then
+          if (eos_has_ymu()) then
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_), &
+                                      ymu=w(ix^D,ymu_))
+          else
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+          endif
         else
           eps = w(ix^D, T_eps_)
         endif
@@ -776,5 +796,4 @@ bracket_dot = 0.0d0
   end subroutine STF
 
 end module mod_gw_br_Iij_Qij
-
 

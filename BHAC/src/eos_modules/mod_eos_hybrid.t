@@ -218,7 +218,7 @@ contains
 !==================================================================
 
 
-    subroutine hybrid_poly_get_pressure_one_grid(prs, rho, eps, temp, ye)
+    subroutine hybrid_poly_get_pressure_one_grid(prs, rho, eps, temp, ye, ymu)
   
         use mod_eos
         include 'amrvacdef.f'
@@ -227,6 +227,7 @@ contains
         double precision, intent(in) :: rho
         double precision, intent(in) :: eps
         double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
         double precision, intent(inout), optional :: temp
         ! local variable below
         double precision             :: eps_cold, eps_th
@@ -246,7 +247,7 @@ contains
     end subroutine hybrid_poly_get_pressure_one_grid
 
 
-    subroutine hybrid_poly_get_eps_one_grid(prs, rho, eps, temp, ye)
+    subroutine hybrid_poly_get_eps_one_grid(prs, rho, eps, temp, ye, ymu)
   
         use mod_eos
         include 'amrvacdef.f'
@@ -254,7 +255,7 @@ contains
         double precision, intent(in) :: prs
         double precision, intent(in) :: rho
         double precision, intent(inout) :: eps
-        double precision, intent(in), optional :: temp, ye
+        double precision, intent(in), optional :: temp, ye, ymu
         ! local variables
         double precision             :: prs_cold, eps_cold
         double precision             :: prs_th
@@ -278,7 +279,7 @@ contains
     end subroutine hybrid_poly_get_eps_one_grid
 
 
-    subroutine hybrid_poly_get_cs2_one_grid(cs2, rho, eps, temp, ye)
+    subroutine hybrid_poly_get_cs2_one_grid(cs2, rho, eps, temp, ye, ymu)
         use mod_eos
         include 'amrvacdef.f'
     
@@ -286,6 +287,7 @@ contains
         double precision, intent(in) :: rho
         double precision, intent(in) :: eps
         double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
         double precision, intent(inout), optional :: temp
         ! local variables
         double precision             :: eps_cold, eps_th
@@ -312,11 +314,12 @@ contains
     end subroutine hybrid_poly_get_cs2_one_grid
 
 
-    subroutine hybrid_poly_get_temp_one_grid(rho, eps, temp, ye)
+    subroutine hybrid_poly_get_temp_one_grid(rho, eps, temp, ye, ymu)
         use mod_eos
         double precision, intent(in)    :: rho 
         double precision, intent(in)    :: ye
         double precision, intent(inout) :: temp, eps
+        double precision, intent(in), optional :: ymu
         ! local
         double precision                :: eps_cold, eps_th
 
@@ -327,10 +330,11 @@ contains
     end subroutine hybrid_poly_get_temp_one_grid
 
 
-    subroutine hybrid_poly_get_eps_range(rho, eps_min, eps_max, ye)
+    subroutine hybrid_poly_get_eps_range(rho, eps_min, eps_max, ye, ymu)
         use mod_eos
         double precision, intent(in) :: rho
         double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
         double precision, intent(out) :: eps_max, eps_min
 
         !eps_min = small_eps
@@ -434,7 +438,7 @@ contains
     end subroutine get_zero_temp_betaeqm_sequence
 
 
-    subroutine hybrid_tab_get_pressure_one_grid(prs, rho, eps, temp, ye)
+    subroutine hybrid_tab_get_pressure_one_grid(prs, rho, eps, temp, ye, ymu)
   
         use mod_eos
         include 'amrvacdef.f'
@@ -443,6 +447,7 @@ contains
         double precision, intent(in) :: rho
         double precision, intent(in) :: eps
         double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
         double precision, intent(inout), optional :: temp
         ! local variable below
         double precision             :: eps_cold, eps_th, prs_cold
@@ -473,7 +478,7 @@ contains
     end subroutine hybrid_tab_get_pressure_one_grid
 
 
-    subroutine hybrid_tab_get_eps_one_grid(prs, rho, eps, temp, ye)
+    subroutine hybrid_tab_get_eps_one_grid(prs, rho, eps, temp, ye, ymu)
   
         use mod_eos
         include 'amrvacdef.f'
@@ -481,7 +486,7 @@ contains
         double precision, intent(in) :: prs
         double precision, intent(in) :: rho
         double precision, intent(inout) :: eps
-        double precision, intent(in), optional :: temp, ye
+        double precision, intent(in), optional :: temp, ye, ymu
         ! local variables
         double precision             :: prs_cold, eps_cold
         double precision             :: prs_th
@@ -513,13 +518,14 @@ contains
     end subroutine hybrid_tab_get_eps_one_grid
 
 
-    subroutine hybrid_tab_get_cs2_one_grid(cs2, rho, eps, temp, ye)
+    subroutine hybrid_tab_get_cs2_one_grid(cs2, rho, eps, temp, ye, ymu)
         use mod_eos
         include 'amrvacdef.f'
         double precision, intent(inout) :: cs2
         double precision, intent(in) :: rho
         double precision, intent(in) :: eps
         double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
         double precision, intent(inout), optional :: temp
         ! local variables
         double precision             :: prs, eps_th, enthalpy
@@ -553,10 +559,11 @@ contains
     end subroutine hybrid_tab_get_cs2_one_grid
 
 
-    subroutine hybrid_tab_get_eps_range(rho, eps_min, eps_max, ye)
+    subroutine hybrid_tab_get_eps_range(rho, eps_min, eps_max, ye, ymu)
         use mod_eos
         double precision, intent(in) :: rho
         double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
         double precision, intent(out) :: eps_max, eps_min
 
         !eps_min = small_eps
@@ -565,11 +572,12 @@ contains
     end subroutine
 
 
-    subroutine hybrid_tab_get_temp_one_grid(rho, eps, temp, ye)
+    subroutine hybrid_tab_get_temp_one_grid(rho, eps, temp, ye, ymu)
         use mod_eos
         double precision, intent(in) :: rho 
         double precision, intent(in) :: ye
         double precision, intent(inout) :: temp, eps
+        double precision, intent(in), optional :: ymu
         ! local
         double precision             :: eps_cold, eps_th
 
@@ -585,11 +593,12 @@ contains
     end subroutine hybrid_tab_get_temp_one_grid
 
 
-    subroutine hybrid_tab_get_all_beta_eqm_one_grid(rho, temp, ye, eps, prs)
+    subroutine hybrid_tab_get_all_beta_eqm_one_grid(rho, temp, ye, eps, prs, ymu)
         use mod_eos
         double precision, intent(in)              :: rho, temp
         double precision, intent(inout)           :: ye
         double precision, intent(inout), optional :: eps, prs
+        double precision, intent(inout), optional :: ymu
     
         ! given rho and temp, get Ye which satisfies beta equilibrium
         if (rho>eos_rhomax .or. rho<eos_rhomin) then
@@ -602,6 +611,7 @@ contains
             call search_and_interpolate_cold_eos_table(eps, rho, idx_eps, .true.)
         endif
         if (present(prs)) call search_and_interpolate_cold_eos_table(prs, rho, idx_prs, .true.)
+        if (present(ymu)) ymu = eos_ymumin
         
     end subroutine hybrid_tab_get_all_beta_eqm_one_grid
 

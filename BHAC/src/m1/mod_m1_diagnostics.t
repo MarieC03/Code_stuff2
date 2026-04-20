@@ -10,8 +10,8 @@ module mod_m1_diagnostics
   
       use mod_m1_internal
       use mod_m1_constants
-      use mod_eos_tabulated
-      use mod_eos, only: small_rho, small_temp, big_ye , eos_yemin, eos_yemax
+      use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin, eos_yemax, eos_ymumin, &
+           eos_temp_get_all_one_grid
       use mod_m1_eas_param
       use mod_m1_closure
       
@@ -76,11 +76,8 @@ module mod_m1_diagnostics
         rho = wprim(ix^D,rho_) 
         T_fluid = wprim(ix^D,T_eps_) 
         y_e = wprim(ix^D,Ye_) 
-        y_mu = 0.0
-   
-        {#IFDEF MUONS
-          y_mu = wprim(ix^D,Ymu_) 
-        \}
+        y_mu = eos_ymumin
+        if (m1_use_muons) y_mu = wprim(ix^D,Ymu_)
    
         y_p = y_e + y_mu
         rho_cgs = rho/RHOGF
@@ -89,9 +86,16 @@ module mod_m1_diagnostics
    
         {#IFNDEF UNIT_TESTS
         !> get the chemical potentials from EoS-table
-        call tabulated_temp_get_all_one_grid(rho,T_fluid,y_e,eps,prs=prs,ent=ent,&
-           cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
-           abar=abar1,zbar=zbar1,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+        if (m1_use_muons) then
+          call eos_temp_get_all_one_grid(rho,T_fluid,y_e,eps,prs=prs,ent=ent,&
+             cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+             abar=abar1,zbar=zbar1,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu,&
+             ymu=y_mu)
+        else
+          call eos_temp_get_all_one_grid(rho,T_fluid,y_e,eps,prs=prs,ent=ent,&
+             cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+             abar=abar1,zbar=zbar1,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+        endif
         } 
      
        

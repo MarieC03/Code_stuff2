@@ -116,7 +116,7 @@ contains
     double precision :: beta_equil_tscale                ! Dimensionless timescale parameter
     double precision :: fac                              ! Interpolation factor
 
-    double precision, dimension(1:3) :: fluid_Prim
+    double precision, dimension(1:fluid_vars) :: fluid_Prim
     double precision, dimension(1:^NS) :: N_KSP
     double precision, dimension(1:m1_numvars_internal, ^NS) :: wrad_KSP
     double precision, dimension(1:^NC) :: vel_
@@ -158,9 +158,11 @@ contains
     !*********************************************************************      
     {do ix^D=ixOmin^D,ixOmax^D \}
 
+      fluid_Prim(:) = 0.0d0
       fluid_Prim(idx_rho) = wprim(ix^D,rho_) 
       fluid_Prim(idx_T) = wprim(ix^D,T_eps_) 
       fluid_Prim(idx_Ye) = wprim(ix^D,Ye_) 
+      if (m1_use_muons) fluid_Prim(idx_Ymu) = wprim(ix^D,Ymu_)
 
       !KEN this if statements prevents eas calculations were it would be zero.
       if(fluid_Prim(idx_rho) .le. small_rho_thr) then
@@ -354,8 +356,8 @@ contains
     use mod_m1_fermi
     use mod_m1_constants
     use mod_m1_eas_microphysical_gray
-    use mod_eos_tabulated
-    use mod_eos, only: small_rho, small_temp, big_ye , eos_yemin, eos_yemax
+    use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin, eos_yemax, eos_ymumin, &
+         eos_temp_get_all_one_grid
     !............................
     use mod_Weakhub_reader !, only: logrho_IVtable,IVtemp,logTemp_IVtable,Ye_IVtable, &
       ! kappa_a_en_grey_table,kappa_s_grey_table,kappa_a_num_grey_table
@@ -381,7 +383,7 @@ contains
     ! internal
     double precision, parameter :: Qnp1 = 1.2935 ! MeV !> rest-mass energy difference n&p (Ruffert 95)
     double precision :: eas_eq(1:m1_num_eas)
-    double precision :: T_fluid, rho_fluid, ye_fluid 
+    double precision :: T_fluid, rho_fluid, ye_fluid, ymu_fluid
     double precision :: tau_opt    !> optical depth
     double precision :: T_nu       !> temperature of neutrinos
     double precision :: av_energy  !> average energy of neutrinos
@@ -392,7 +394,7 @@ contains
     double precision :: chem_pot   !> neutrino chemical potential
     double precision :: Q_free, Q_free_n !> emissivity of free streaming alla Ruffert et.al 95
     double precision :: eps,prs,ent,cs2,dedt,dpderho,dpdrhoe
-    double precision :: xa,xh,xn,xp,abar1,zbar1,mu_e,mu_n,mu_p,muhat,munu
+    double precision :: xa,xh,xn,xp,abar1,zbar1,mu_e,mu_n,mu_p,mu_mu,muhat,munu
     double precision :: UNITS_rho,UNITS_chem_pot,rho_cgs
     double precision :: Qems,Qems_n,kappa_a_analyt,kappa_n_analyt
     double precision :: Qems_tmp, Qems_n_tmp
@@ -421,6 +423,8 @@ contains
     rho_fluid  = fluid_Prim(idx_rho)
     ye_fluid   = fluid_Prim(idx_ye)
     T_fluid    = fluid_Prim(idx_T)
+    ymu_fluid  = eos_ymumin
+    if (m1_use_muons) ymu_fluid = fluid_Prim(idx_ymu)
 
 
 
@@ -446,9 +450,17 @@ contains
 
     {#IFNDEF UNIT_TESTS
     !> get the chemical potentials from EoS-table
-    call tabulated_temp_get_all_one_grid(rho_fluid,T_fluid,ye_fluid,eps,prs=prs,ent=ent,&
-         cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
-         abar=abar1,zbar=zbar1,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+    if (m1_use_muons) then
+      call eos_temp_get_all_one_grid(rho_fluid,T_fluid,ye_fluid,eps,prs=prs,ent=ent,&
+           cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+           abar=abar1,zbar=zbar1,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,mu_mu=mu_mu,muhat=muhat,&
+           munu=munu,ymu=ymu_fluid)
+    else
+      call eos_temp_get_all_one_grid(rho_fluid,T_fluid,ye_fluid,eps,prs=prs,ent=ent,&
+           cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+           abar=abar1,zbar=zbar1,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+      mu_mu = 0.0d0
+    endif
     }
 
 
@@ -462,9 +474,9 @@ contains
     else if(speciesKSP .eq. m1_i_nux) then
       chem_pot = 0.0d0
     else if(speciesKSP .eq. m1_i_mu) then
-      chem_pot = 0.0d0
+      chem_pot = mu_mu + mu_p - mu_n - Qnp1
     else if(speciesKSP .eq. m1_i_mubar) then
-      chem_pot = 0.0d0
+      chem_pot = -1.0d0 * (mu_mu + mu_p - mu_n - Qnp1)
     end if 
 
      eta_rad = chem_pot/T_fluid  !> degeneracy parameter
@@ -499,7 +511,7 @@ contains
     call blackbody_ixD(wrad,ix^D,speciesKSP,fluid_Prim,T_fluid,eta_rad,Black_er,Black_nr)
 
     if((speciesKSP .eq. m1_i_nux) .or. (speciesKSP .eq. m1_i_mu) .or. (speciesKSP .eq. m1_i_mubar)) then
-      call m1_eas_analytic_brems(speciesKSP,eta_rad,ye_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
+      call m1_eas_analytic_brems(speciesKSP,eta_rad,ye_fluid,ymu_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
       Qems_tmp = Qems_tmp + Qems
       Qems_n_tmp = Qems_n_tmp + Qems_n
 
@@ -591,7 +603,7 @@ contains
   !/**************************************/
   
   !KEN did this like in FIL
-subroutine m1_eas_analytic_brems(speciesKSP,eta_nu,ye_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
+subroutine m1_eas_analytic_brems(speciesKSP,eta_nu,ye_fluid,ymu_fluid,T_fluid,rho_fluid,av_energy,T_nu,eas,Qems,Qems_n)
   use mod_m1_internal
   use mod_m1_eas_param
   use mod_m1_constants
@@ -600,7 +612,7 @@ subroutine m1_eas_analytic_brems(speciesKSP,eta_nu,ye_fluid,T_fluid,rho_fluid,av
   
   integer, intent(in) :: speciesKSP
   double precision, intent(in) :: eta_nu
-  double precision, intent(in) :: ye_fluid,T_fluid,rho_fluid
+  double precision, intent(in) :: ye_fluid,ymu_fluid,T_fluid,rho_fluid
   double precision, intent(in) :: av_energy,T_nu
   double precision, intent(inout) :: eas(1:m1_num_eas)
   double precision, intent(inout) :: Qems, Qems_n
@@ -611,8 +623,7 @@ subroutine m1_eas_analytic_brems(speciesKSP,eta_nu,ye_fluid,T_fluid,rho_fluid,av
   double precision :: rho_cgs, T_mev
 
   ! Calculate neutron and proton fractions
-  !KEN TODO when adding muons
-  Y_p = ye_fluid
+  Y_p = ye_fluid + ymu_fluid
   Y_n = 1.0d0 - Y_p
 
   Qems = 0.0d0
@@ -948,7 +959,7 @@ end subroutine m1_eas_analytic_plasmon
     double precision :: energy_av    
 
     Y_p = ye_fluid
-    Y_n = Y_p - 1.0d0
+    Y_n = 1.0d0 - Y_p
 
     ! fuagcities
     eta_p = mu_p/T_fluid

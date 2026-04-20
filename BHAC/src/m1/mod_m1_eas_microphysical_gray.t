@@ -11,7 +11,7 @@ contains
     use mod_m1_internal
     use mod_m1_eas_param
     use mod_Weakhub_reader
-    use mod_interpolate, only: TrilinearInterpolation
+    use mod_interpolate, only: TrilinearInterpolation, QuadrilinearInterpolation
     {#IFDEF UNIT_TESTS
     use mod_m1_tests
     }
@@ -23,14 +23,16 @@ contains
      double precision, intent(inout) :: fluid_Prim(1:fluid_vars)
      double precision, intent(inout) :: eas_eq(1:m1_num_eas)
      ! internal
-     double precision :: Temp_fluid, rho_fluid, ye_fluid ! chem_pot 
+     double precision :: Temp_fluid, rho_fluid, ye_fluid, ymu_fluid
      double precision :: Temp_fluid_units, Rho_fluid_units, Ye_fluid_units
      !double precision :: eta_nu
-     double precision :: LogRho, LogTemp, Yeloc 
+     double precision :: LogRho, LogTemp, Yeloc, LogYmuloc
      double precision :: LogRhoTab1, LogRhoTab2
      double precision :: YeTab1, YeTab2
-     double precision :: LogTempTab1, LogTempTab2
+     double precision :: LogTempTab1, LogTempTab2, LogYmuTab1, LogYmuTab2
      double precision :: f111, f211, f121, f221, f112, f212, f122, f222, result
+     double precision :: f1111, f2111, f1211, f2211, f1121, f2121, f1221, f2221
+     double precision :: f1112, f2112, f1212, f2212, f1122, f2122, f1222, f2222
      double precision :: UNITS_rho, UNITS_temp, UNITS_ye
      integer :: irho1, iye1, itemp1, iimu
      integer :: i,J
@@ -38,6 +40,8 @@ contains
      rho_fluid  = fluid_Prim(idx_rho)
      ye_fluid   = fluid_Prim(idx_ye)
      Temp_fluid = fluid_Prim(idx_T)
+     ymu_fluid  = 0.0d0
+     if (m1_use_muons) ymu_fluid = fluid_Prim(idx_Ymu)
 
      !-------------
      UNITS_rho  = 1 
@@ -66,7 +70,7 @@ contains
      end do 
      !--------------
      !-------------- treating temp
-     temp_fluid_units  = temp_fluid * UNITS_ye ! now in units of table
+     temp_fluid_units  = temp_fluid * UNITS_temp ! now in units of table
      LogTemp = DLOG(temp_fluid_units)
      if(LogTemp>=logtemp_max_IV) then
         !write(99,*)"LogTemp_fluid is larger than logtemp_max in table"
@@ -106,48 +110,131 @@ contains
      !--------------
      ! ----  do Trilinear interpolation to find rates on grid of rho,ye,temp ------
      if(m1_use_muons) then
-       call mpistop("m1_eas_micrphysical_grey: implement tables for iimu index")
+       if (IVymu < 2) call mpistop("Muonic weakhub table needs at least two ymu points")
+       LogYmuloc = DLOG(max(ymu_fluid, exp(logymu_min_IV)))
+       if(LogYmuloc >= logymu_max_IV) then
+          LogYmuloc = logymu_max_IV * 0.9999999d0
+       else if(LogYmuloc < logymu_min_IV) then
+          LogYmuloc = logymu_min_IV
+       end if
+       iimu = 1
+       do i = 1, IVymu-1
+        if((LogYmuloc >= logymu_IVtable(i)) .and. (LogYmuloc < logymu_IVtable(i+1))) then
+          iimu = i
+          LogYmuTab1 = logymu_IVtable(i)
+          LogYmuTab2 = logymu_IVtable(i+1)
+        end if
+       end do
      else
        iimu = 1
      end if 
 
      ! get kappa_a energy rate
-     f111 = kappa_a_en_grey_table( irho1, itemp1, iye1,iimu, speciesKSP)
-     f211 = kappa_a_en_grey_table( irho1+1, itemp1, iye1,iimu, speciesKSP)
-     f121 = kappa_a_en_grey_table( irho1, itemp1+1, iye1,iimu, speciesKSP)
-     f221 = kappa_a_en_grey_table( irho1+1, itemp1+1, iye1,iimu, speciesKSP)
-     f112 = kappa_a_en_grey_table( irho1, itemp1, iye1+1,iimu, speciesKSP)
-     f212 = kappa_a_en_grey_table( irho1+1, itemp1, iye1+1,iimu, speciesKSP)
-     f122 = kappa_a_en_grey_table( irho1, itemp1+1, iye1+1, iimu, speciesKSP)
-     f222 = kappa_a_en_grey_table( irho1+1, itemp1+1, iye1+1,iimu, speciesKSP)
-     call TrilinearInterpolation(LogRho, LogTemp, Yeloc, LogRhoTab1, LogRhoTab2, LogTempTab1, LogTempTab2, &
-            YeTab1, YeTab2, f111, f211, f121, f221, f112, f212, f122, f222, result)
+     if (m1_use_muons) then
+       f1111 = kappa_a_en_grey_table(irho1, itemp1, iye1, iimu, speciesKSP)
+       f2111 = kappa_a_en_grey_table(irho1+1, itemp1, iye1, iimu, speciesKSP)
+       f1211 = kappa_a_en_grey_table(irho1, itemp1+1, iye1, iimu, speciesKSP)
+       f2211 = kappa_a_en_grey_table(irho1+1, itemp1+1, iye1, iimu, speciesKSP)
+       f1121 = kappa_a_en_grey_table(irho1, itemp1, iye1+1, iimu, speciesKSP)
+       f2121 = kappa_a_en_grey_table(irho1+1, itemp1, iye1+1, iimu, speciesKSP)
+       f1221 = kappa_a_en_grey_table(irho1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f2221 = kappa_a_en_grey_table(irho1+1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f1112 = kappa_a_en_grey_table(irho1, itemp1, iye1, iimu+1, speciesKSP)
+       f2112 = kappa_a_en_grey_table(irho1+1, itemp1, iye1, iimu+1, speciesKSP)
+       f1212 = kappa_a_en_grey_table(irho1, itemp1+1, iye1, iimu+1, speciesKSP)
+       f2212 = kappa_a_en_grey_table(irho1+1, itemp1+1, iye1, iimu+1, speciesKSP)
+       f1122 = kappa_a_en_grey_table(irho1, itemp1, iye1+1, iimu+1, speciesKSP)
+       f2122 = kappa_a_en_grey_table(irho1+1, itemp1, iye1+1, iimu+1, speciesKSP)
+       f1222 = kappa_a_en_grey_table(irho1, itemp1+1, iye1+1, iimu+1, speciesKSP)
+       f2222 = kappa_a_en_grey_table(irho1+1, itemp1+1, iye1+1, iimu+1, speciesKSP)
+       call QuadrilinearInterpolation(LogRho, LogTemp, Yeloc, LogYmuloc, LogRhoTab1, LogRhoTab2, &
+              LogTempTab1, LogTempTab2, YeTab1, YeTab2, LogYmuTab1, LogYmuTab2, &
+              f1111, f2111, f1211, f2211, f1121, f2121, f1221, f2221, &
+              f1112, f2112, f1212, f2212, f1122, f2122, f1222, f2222, result)
+     else
+       f111 = kappa_a_en_grey_table( irho1, itemp1, iye1,iimu, speciesKSP)
+       f211 = kappa_a_en_grey_table( irho1+1, itemp1, iye1,iimu, speciesKSP)
+       f121 = kappa_a_en_grey_table( irho1, itemp1+1, iye1,iimu, speciesKSP)
+       f221 = kappa_a_en_grey_table( irho1+1, itemp1+1, iye1,iimu, speciesKSP)
+       f112 = kappa_a_en_grey_table( irho1, itemp1, iye1+1,iimu, speciesKSP)
+       f212 = kappa_a_en_grey_table( irho1+1, itemp1, iye1+1,iimu, speciesKSP)
+       f122 = kappa_a_en_grey_table( irho1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f222 = kappa_a_en_grey_table( irho1+1, itemp1+1, iye1+1,iimu, speciesKSP)
+       call TrilinearInterpolation(LogRho, LogTemp, Yeloc, LogRhoTab1, LogRhoTab2, LogTempTab1, LogTempTab2, &
+              YeTab1, YeTab2, f111, f211, f121, f221, f112, f212, f122, f222, result)
+     endif
      eas_eq(k_a) = result
 
      ! get kappa_s energy rate
-     f111 = kappa_s_grey_table( irho1, itemp1, iye1,iimu, speciesKSP)
-     f211 = kappa_s_grey_table( irho1+1, itemp1, iye1,iimu, speciesKSP)
-     f121 = kappa_s_grey_table( irho1, itemp1+1, iye1,iimu, speciesKSP)
-     f221 = kappa_s_grey_table( irho1+1, itemp1+1, iye1,iimu, speciesKSP)
-     f112 = kappa_s_grey_table( irho1, itemp1, iye1+1,iimu, speciesKSP)
-     f212 = kappa_s_grey_table( irho1+1, itemp1, iye1+1,iimu, speciesKSP)
-     f122 = kappa_s_grey_table( irho1, itemp1+1, iye1+1, iimu, speciesKSP)
-     f222 = kappa_s_grey_table( irho1+1, itemp1+1, iye1+1,iimu, speciesKSP)
-     call TrilinearInterpolation(LogRho, LogTemp, Yeloc, LogRhoTab1, LogRhoTab2, LogTempTab1, LogTempTab2, &
-            YeTab1, YeTab2, f111, f211, f121, f221, f112, f212, f122, f222, result)
+     if (m1_use_muons) then
+       f1111 = kappa_s_grey_table(irho1, itemp1, iye1, iimu, speciesKSP)
+       f2111 = kappa_s_grey_table(irho1+1, itemp1, iye1, iimu, speciesKSP)
+       f1211 = kappa_s_grey_table(irho1, itemp1+1, iye1, iimu, speciesKSP)
+       f2211 = kappa_s_grey_table(irho1+1, itemp1+1, iye1, iimu, speciesKSP)
+       f1121 = kappa_s_grey_table(irho1, itemp1, iye1+1, iimu, speciesKSP)
+       f2121 = kappa_s_grey_table(irho1+1, itemp1, iye1+1, iimu, speciesKSP)
+       f1221 = kappa_s_grey_table(irho1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f2221 = kappa_s_grey_table(irho1+1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f1112 = kappa_s_grey_table(irho1, itemp1, iye1, iimu+1, speciesKSP)
+       f2112 = kappa_s_grey_table(irho1+1, itemp1, iye1, iimu+1, speciesKSP)
+       f1212 = kappa_s_grey_table(irho1, itemp1+1, iye1, iimu+1, speciesKSP)
+       f2212 = kappa_s_grey_table(irho1+1, itemp1+1, iye1, iimu+1, speciesKSP)
+       f1122 = kappa_s_grey_table(irho1, itemp1, iye1+1, iimu+1, speciesKSP)
+       f2122 = kappa_s_grey_table(irho1+1, itemp1, iye1+1, iimu+1, speciesKSP)
+       f1222 = kappa_s_grey_table(irho1, itemp1+1, iye1+1, iimu+1, speciesKSP)
+       f2222 = kappa_s_grey_table(irho1+1, itemp1+1, iye1+1, iimu+1, speciesKSP)
+       call QuadrilinearInterpolation(LogRho, LogTemp, Yeloc, LogYmuloc, LogRhoTab1, LogRhoTab2, &
+              LogTempTab1, LogTempTab2, YeTab1, YeTab2, LogYmuTab1, LogYmuTab2, &
+              f1111, f2111, f1211, f2211, f1121, f2121, f1221, f2221, &
+              f1112, f2112, f1212, f2212, f1122, f2122, f1222, f2222, result)
+     else
+       f111 = kappa_s_grey_table( irho1, itemp1, iye1,iimu, speciesKSP)
+       f211 = kappa_s_grey_table( irho1+1, itemp1, iye1,iimu, speciesKSP)
+       f121 = kappa_s_grey_table( irho1, itemp1+1, iye1,iimu, speciesKSP)
+       f221 = kappa_s_grey_table( irho1+1, itemp1+1, iye1,iimu, speciesKSP)
+       f112 = kappa_s_grey_table( irho1, itemp1, iye1+1,iimu, speciesKSP)
+       f212 = kappa_s_grey_table( irho1+1, itemp1, iye1+1,iimu, speciesKSP)
+       f122 = kappa_s_grey_table( irho1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f222 = kappa_s_grey_table( irho1+1, itemp1+1, iye1+1,iimu, speciesKSP)
+       call TrilinearInterpolation(LogRho, LogTemp, Yeloc, LogRhoTab1, LogRhoTab2, LogTempTab1, LogTempTab2, &
+              YeTab1, YeTab2, f111, f211, f121, f221, f112, f212, f122, f222, result)
+     endif
      eas_eq(k_s) = result 
 
      ! get kappa_a number rate
-     f111 = kappa_a_num_grey_table( irho1, itemp1, iye1,iimu, speciesKSP)
-     f211 = kappa_a_num_grey_table( irho1+1, itemp1, iye1,iimu, speciesKSP)
-     f121 = kappa_a_num_grey_table( irho1, itemp1+1, iye1,iimu, speciesKSP)
-     f221 = kappa_a_num_grey_table( irho1+1, itemp1+1, iye1,iimu, speciesKSP)
-     f112 = kappa_a_num_grey_table( irho1, itemp1, iye1+1,iimu, speciesKSP)
-     f212 = kappa_a_num_grey_table( irho1+1, itemp1, iye1+1,iimu, speciesKSP)
-     f122 = kappa_a_num_grey_table( irho1, itemp1+1, iye1+1, iimu, speciesKSP)
-     f222 = kappa_a_num_grey_table( irho1+1, itemp1+1, iye1+1,iimu, speciesKSP)
-     call TrilinearInterpolation(LogRho, LogTemp, Yeloc, LogRhoTab1, LogRhoTab2, LogTempTab1, LogTempTab2, &
-            YeTab1, YeTab2, f111, f211, f121, f221, f112, f212, f122, f222, result)
+     if (m1_use_muons) then
+       f1111 = kappa_a_num_grey_table(irho1, itemp1, iye1, iimu, speciesKSP)
+       f2111 = kappa_a_num_grey_table(irho1+1, itemp1, iye1, iimu, speciesKSP)
+       f1211 = kappa_a_num_grey_table(irho1, itemp1+1, iye1, iimu, speciesKSP)
+       f2211 = kappa_a_num_grey_table(irho1+1, itemp1+1, iye1, iimu, speciesKSP)
+       f1121 = kappa_a_num_grey_table(irho1, itemp1, iye1+1, iimu, speciesKSP)
+       f2121 = kappa_a_num_grey_table(irho1+1, itemp1, iye1+1, iimu, speciesKSP)
+       f1221 = kappa_a_num_grey_table(irho1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f2221 = kappa_a_num_grey_table(irho1+1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f1112 = kappa_a_num_grey_table(irho1, itemp1, iye1, iimu+1, speciesKSP)
+       f2112 = kappa_a_num_grey_table(irho1+1, itemp1, iye1, iimu+1, speciesKSP)
+       f1212 = kappa_a_num_grey_table(irho1, itemp1+1, iye1, iimu+1, speciesKSP)
+       f2212 = kappa_a_num_grey_table(irho1+1, itemp1+1, iye1, iimu+1, speciesKSP)
+       f1122 = kappa_a_num_grey_table(irho1, itemp1, iye1+1, iimu+1, speciesKSP)
+       f2122 = kappa_a_num_grey_table(irho1+1, itemp1, iye1+1, iimu+1, speciesKSP)
+       f1222 = kappa_a_num_grey_table(irho1, itemp1+1, iye1+1, iimu+1, speciesKSP)
+       f2222 = kappa_a_num_grey_table(irho1+1, itemp1+1, iye1+1, iimu+1, speciesKSP)
+       call QuadrilinearInterpolation(LogRho, LogTemp, Yeloc, LogYmuloc, LogRhoTab1, LogRhoTab2, &
+              LogTempTab1, LogTempTab2, YeTab1, YeTab2, LogYmuTab1, LogYmuTab2, &
+              f1111, f2111, f1211, f2211, f1121, f2121, f1221, f2221, &
+              f1112, f2112, f1212, f2212, f1122, f2122, f1222, f2222, result)
+     else
+       f111 = kappa_a_num_grey_table( irho1, itemp1, iye1,iimu, speciesKSP)
+       f211 = kappa_a_num_grey_table( irho1+1, itemp1, iye1,iimu, speciesKSP)
+       f121 = kappa_a_num_grey_table( irho1, itemp1+1, iye1,iimu, speciesKSP)
+       f221 = kappa_a_num_grey_table( irho1+1, itemp1+1, iye1,iimu, speciesKSP)
+       f112 = kappa_a_num_grey_table( irho1, itemp1, iye1+1,iimu, speciesKSP)
+       f212 = kappa_a_num_grey_table( irho1+1, itemp1, iye1+1,iimu, speciesKSP)
+       f122 = kappa_a_num_grey_table( irho1, itemp1+1, iye1+1, iimu, speciesKSP)
+       f222 = kappa_a_num_grey_table( irho1+1, itemp1+1, iye1+1,iimu, speciesKSP)
+       call TrilinearInterpolation(LogRho, LogTemp, Yeloc, LogRhoTab1, LogRhoTab2, LogTempTab1, LogTempTab2, &
+              YeTab1, YeTab2, f111, f211, f121, f221, f112, f212, f122, f222, result)
+     endif
      eas_eq(k_n) = result
 
      !if(m1_use_muons .ne. .true.) then

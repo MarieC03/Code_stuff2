@@ -102,7 +102,7 @@ contains
     double precision :: x4_min(4), x4_max(4)
    
     !......................
-    use_muonic_table =.false.
+    use_muonic_table = m1_use_muons
     n_ebin = 1
     !......................
 
@@ -449,4 +449,3 @@ contains
   !###########################################################################
 
 end module mod_Weakhub_reader
-

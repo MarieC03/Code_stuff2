@@ -60,11 +60,20 @@ module mod_post_process
         parker = 0
         call imhd_get_intermediate_variables(ixI^L, ixO^L, w, x, b2=b2_tmp(ixI^S))
         {do ix^D=ixOmin^D, ixOmax^D \}
-            if (eos_type == tabulated) then
+            if (eos_uses_ye()) then
                 temp_tmp = w(ix^D, T_eps_)
-                call eos_get_eps_one_grid(eos_prsmin, w(ix^D, rho_), eps_tmp, temp_tmp, w(ix^D, ye_))
-                call eos_get_pressure_one_grid(prs_tmp, w(ix^D, rho_), eps_tmp, temp_tmp, ye=w(ix^D, ye_))
-                call eos_get_cs2_one_grid(cs2_tmp, w(ix^D, rho_), eps_tmp, temp_tmp, ye=w(ix^D, ye_))
+                if (eos_has_ymu()) then
+                    call eos_get_eps_one_grid(eos_prsmin, w(ix^D, rho_), eps_tmp, temp_tmp, &
+                                              w(ix^D, ye_), w(ix^D, ymu_))
+                    call eos_get_pressure_one_grid(prs_tmp, w(ix^D, rho_), eps_tmp, temp_tmp, &
+                                                   ye=w(ix^D, ye_), ymu=w(ix^D, ymu_))
+                    call eos_get_cs2_one_grid(cs2_tmp, w(ix^D, rho_), eps_tmp, temp_tmp, &
+                                              ye=w(ix^D, ye_), ymu=w(ix^D, ymu_))
+                else
+                    call eos_get_eps_one_grid(eos_prsmin, w(ix^D, rho_), eps_tmp, temp_tmp, w(ix^D, ye_))
+                    call eos_get_pressure_one_grid(prs_tmp, w(ix^D, rho_), eps_tmp, temp_tmp, ye=w(ix^D, ye_))
+                    call eos_get_cs2_one_grid(cs2_tmp, w(ix^D, rho_), eps_tmp, temp_tmp, ye=w(ix^D, ye_))
+                endif
             else
                 eps_tmp = w(ix^D, T_eps_)
                 call eos_get_pressure_one_grid(prs_tmp, w(ix^D, rho_), eps_tmp)
@@ -121,12 +130,19 @@ module mod_post_process
                 call lower4_dysp(ixI^L, ixO^L, w, x, b4_vec, b4_form)
             endif
             {do ix^D=ixOmin^D, ixOmax^D \}
-                if (eos_type == tabulated) then
+                if (eos_uses_ye()) then
                     var_temp = w(ix^D, T_eps_)
-                    call eos_get_eps_one_grid(0.0d0, w(ix^D, rho_), val_eps, var_temp, w(ix^D, ye_))
-                    call eos_get_pressure_one_grid(p_lc, w(ix^D, rho_), val_eps, var_temp, ye=w(ix^D, ye_))
+                    if (eos_has_ymu()) then
+                        call eos_get_eps_one_grid(0.0d0, w(ix^D, rho_), val_eps, var_temp, &
+                                                  w(ix^D, ye_), w(ix^D, ymu_))
+                        call eos_get_pressure_one_grid(p_lc, w(ix^D, rho_), val_eps, var_temp, &
+                                                       ye=w(ix^D, ye_), ymu=w(ix^D, ymu_))
+                    else
+                        call eos_get_eps_one_grid(0.0d0, w(ix^D, rho_), val_eps, var_temp, w(ix^D, ye_))
+                        call eos_get_pressure_one_grid(p_lc, w(ix^D, rho_), val_eps, var_temp, ye=w(ix^D, ye_))
+                    endif
                 else
-                    call eos_get_pressure_one_grid(p_lc, w(ix^D, rho_), w(ix^D, T_eps_), ye=w(ix^D, ye_))
+                    call eos_get_pressure_one_grid(p_lc, w(ix^D, rho_), w(ix^D, T_eps_))
                 endif
                 nc_x = x(ix^D, 1)-cmx
                 nc_y = x(ix^D, 2)-cmy
@@ -1174,4 +1190,3 @@ module mod_post_process
     end subroutine check_vort_shear_correct
 
 end module mod_post_process
-

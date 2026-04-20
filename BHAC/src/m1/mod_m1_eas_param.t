@@ -17,10 +17,11 @@ module mod_m1_eas_param
   integer, parameter :: tau_path   = 6
 
 
-  integer, parameter :: fluid_vars = 3
+  integer, parameter :: fluid_vars = 4
   integer, parameter :: idx_rho = 1
   integer, parameter :: idx_T   = 2
   integer, parameter :: idx_Ye  = 3
+  integer, parameter :: idx_Ymu = 4
 
   integer :: m1_i_nue = 1
   integer :: m1_i_nuebar = 2

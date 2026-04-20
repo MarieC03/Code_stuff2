@@ -80,7 +80,7 @@ contains
     double precision                :: h_hat
     double precision                :: b2_tmp
     ! parameters should be initialized
-    double precision                :: ye_hat 
+    double precision                :: ye_hat, ymu_hat
     double precision                :: temp_hat 
     double precision                :: prs_tmp
     double precision                :: cs2_tmp
@@ -105,16 +105,24 @@ contains
 ! Nothing to do with B field actually as well as Bphi(if glm)
 {^C& cons_tmp(ixO^S, b^C_)  = w(ixO^S,b^C_) \}
 
-    if (eos_type == tabulated) cons_tmp(ixO^S, Dye_)  = w(ixO^S, Dye_)
+    if (eos_uses_ye()) cons_tmp(ixO^S, Dye_)  = w(ixO^S, Dye_)
+    if (eos_has_ymu()) cons_tmp(ixO^S, Dymu_) = w(ixO^S, Dymu_)
 
     !Note that v is contravariant
     {do ix^D = ixO^LIM^D \}
 
-      if (eos_type == tabulated) then
+      if (eos_uses_ye()) then
         ye_hat = cons_tmp(ix^D, Dye_)/cons_tmp(ix^D, D_)  
         ye_hat = max(eos_yemin, min(eos_yemax,ye_hat))
+        if (eos_has_ymu()) then
+          ymu_hat = cons_tmp(ix^D, Dymu_) / cons_tmp(ix^D, D_)
+          ymu_hat = max(eos_ymumin, min(eos_ymumax, ymu_hat))
+        else
+          ymu_hat = 0.0d0
+        endif
       else
         ye_hat = 0.0d0
+        ymu_hat = 0.0d0
       endif
 
       ! code test
@@ -142,6 +150,7 @@ contains
          vi_hat(1:ndir) = 0.0d0
          rho_hat        = small_rho
          ye_hat         = big_ye       ! depends on input data
+         ymu_hat        = eos_ymumin
          eps_hat        = small_eps
          adjustment     = .True.    ! adjust all conserved variables
          ! fixme: add small_xi
@@ -310,7 +319,8 @@ contains
                vi_hat(1:ndir) = 0.0d0
                rho_hat        = small_rho
                eps_hat        = small_eps  
-               ye_hat         = big_ye    
+               ye_hat         = big_ye
+               ymu_hat        = eos_ymumin
                adjustment     = .True. 
          else
             ! limit the velocities
@@ -349,9 +359,14 @@ contains
     if (.not. need_aux_only) then
           ! Update prim
           w(ix^D, rho_)   = rho_hat
-          if (eos_type == tabulated) then
+          if (eos_uses_ye()) then
             w(ix^D, ye_)  = ye_hat  
-            call eos_get_temp_one_grid(w(ix^D, rho_), eps_hat, w(ix^D, T_eps_), w(ix^D, ye_))
+            if (eos_has_ymu()) then
+              w(ix^D, ymu_) = ymu_hat
+            else
+              w(ix^D, ymu_) = eos_ymumin
+            endif
+            call eos_get_temp_one_grid(w(ix^D, rho_), eps_hat, w(ix^D, T_eps_), w(ix^D, ye_), ymu=ymu_hat)
           else
             w(ix^D, T_eps_) = eps_hat
           endif
@@ -361,9 +376,14 @@ contains
           }
 
           {#IFNDEF DY_SP
-          if (eos_type == tabulated) then
-            call eos_temp_get_all_one_grid(w(ix^D,rho_), w(ix^D,T_eps_), w(ix^D,ye_), dummy, &
-                                           prs = prs_tmp)
+          if (eos_uses_ye()) then
+            if (eos_has_ymu()) then
+              call eos_temp_get_all_one_grid(w(ix^D,rho_), w(ix^D,T_eps_), w(ix^D,ye_), dummy, &
+                                             prs = prs_tmp, ymu=w(ix^D,ymu_))
+            else
+              call eos_temp_get_all_one_grid(w(ix^D,rho_), w(ix^D,T_eps_), w(ix^D,ye_), dummy, &
+                                             prs = prs_tmp)
+            endif
           else 
             call eos_get_pressure_one_grid(prs_tmp,w(ix^D,rho_),eps_hat)
           endif
@@ -466,20 +486,20 @@ contains
       eps_hat = W_hat * ( q_bar - mu * r_bar_sqr ) &
                 + v_hat_sqr * W_hat**2 / ( 1.0d0 + W_hat )
 
-      if (eos_type == tabulated) then 
+      if (eos_uses_ye()) then 
          ye_hat = cons_tmp(ix^D, Dye_)/ cons_tmp(ix^D, D_)
          ye_hat = max( min(eos_yemax, ye_hat), eos_yemin)
       endif
 
       if (present(ye_out)) ye_out = ye_hat
-      call eos_get_eps_range(rho_hat, eps_min, eps_max, ye=ye_hat)
+      call eos_get_eps_range(rho_hat, eps_min, eps_max, ye=ye_hat, ymu=ymu_hat)
 
       eps_hat = max( min( eps_max, eps_hat ), eps_min )
 
       if (present(eps_out)) eps_out = eps_hat
 
       ! Never input temp to find pressure here
-      call eos_get_pressure_one_grid(prs_hat,rho_hat,eps_hat,ye=ye_hat)
+      call eos_get_pressure_one_grid(prs_hat,rho_hat,eps_hat,ye=ye_hat,ymu=ymu_hat)
 
       if (present(f_mu)) then
          a_hat = prs_hat / (rho_hat*(1.0d0+eps_hat))

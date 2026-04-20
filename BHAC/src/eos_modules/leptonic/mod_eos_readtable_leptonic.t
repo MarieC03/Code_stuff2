@@ -50,6 +50,7 @@ contains
     ! Temporary flat arrays (C ordering from HDF5)
     double precision, allocatable :: flat_ele(:)   ! nrho*ntemp*nyle*nvars_ele
     double precision, allocatable :: flat_muon(:)  ! nrho*ntemp*nymu*nvars_muon
+    double precision, allocatable :: logrho_tmp(:), logtemp_tmp(:)
 
     integer :: nrho_loc, ntemp_loc, nyle_loc, nymu_loc
     integer :: i, j, k, iv, indold, indnew
@@ -90,27 +91,30 @@ contains
     ! Store in parameter module globals (shared with baryon reader result)
     ! Only overwrite if not already set (baryon reader sets nrho/ntemp first)
     !--------------------------------------------------------------------------
-    lep_nrho  = nrho_loc
-    lep_ntemp = ntemp_loc
+    if (lep_nrho == 0) lep_nrho = nrho_loc
+    if (lep_ntemp == 0) lep_ntemp = ntemp_loc
+    if (lep_nrho /= nrho_loc .or. lep_ntemp /= ntemp_loc) then
+      call mpistop("mod_eos_readtable_leptonic: inconsistent nrho/ntemp with baryon table")
+    end if
     lep_nyle  = nyle_loc
     lep_nymu  = nymu_loc
 
     !--------------------------------------------------------------------------
     ! Allocate axis arrays
     !--------------------------------------------------------------------------
-    if (.not. allocated(lep_logrho_table))  allocate(lep_logrho_table(lep_nrho))
-    if (.not. allocated(lep_logtemp_table)) allocate(lep_logtemp_table(lep_ntemp))
+    allocate(logrho_tmp(lep_nrho))
+    allocate(logtemp_tmp(lep_ntemp))
     if (.not. allocated(lep_yle_table))     allocate(lep_yle_table(lep_nyle))
     if (.not. allocated(lep_logymu_table))  allocate(lep_logymu_table(lep_nymu))
 
     dims1d(1) = lep_nrho
     call h5dopen_f(file_id, "logrho_table",  dset_id, error)
-    call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, lep_logrho_table,  dims1d, error)
+    call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, logrho_tmp,  dims1d, error)
     call h5dclose_f(dset_id, error)
 
     dims1d(1) = lep_ntemp
     call h5dopen_f(file_id, "logtemp_table", dset_id, error)
-    call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, lep_logtemp_table, dims1d, error)
+    call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, logtemp_tmp, dims1d, error)
     call h5dclose_f(dset_id, error)
 
     dims1d(1) = lep_nyle
@@ -122,6 +126,16 @@ contains
     call h5dopen_f(file_id, "ymu_table",     dset_id, error)
     call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, lep_logymu_table,  dims1d, error)
     call h5dclose_f(dset_id, error)
+
+    if (.not. allocated(lep_logrho_table) .or. .not. allocated(lep_logtemp_table)) then
+      call mpistop("mod_eos_readtable_leptonic: baryon axes must be loaded first")
+    end if
+    if (maxval(abs(logrho_tmp - lep_logrho_table)) > 1.0d-12) then
+      call mpistop("mod_eos_readtable_leptonic: rho axis mismatch")
+    end if
+    if (maxval(abs(logtemp_tmp - lep_logtemp_table)) > 1.0d-12) then
+      call mpistop("mod_eos_readtable_leptonic: temp axis mismatch")
+    end if
 
     !--------------------------------------------------------------------------
     ! Read scalar bounds
@@ -154,6 +168,7 @@ contains
     call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, flat_ele, dims1d, error)
     call h5dclose_f(dset_id, error)
 
+    if (allocated(lep_tables_ele)) deallocate(lep_tables_ele)
     allocate(lep_tables_ele(lep_nrho, lep_ntemp, lep_nyle, lep_nvars_ele))
     do iv = 1, lep_nvars_ele
     do k  = 1, lep_nyle
@@ -174,6 +189,7 @@ contains
     call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, flat_muon, dims1d, error)
     call h5dclose_f(dset_id, error)
 
+    if (allocated(lep_tables_muon)) deallocate(lep_tables_muon)
     allocate(lep_tables_muon(lep_nrho, lep_ntemp, lep_nymu, lep_nvars_muon))
     do iv = 1, lep_nvars_muon
     do k  = 1, lep_nymu
@@ -186,6 +202,8 @@ contains
 
     call h5fclose_f(file_id, error)
     call h5close_f(error)
+
+    deallocate(logrho_tmp, logtemp_tmp)
 
     if (mype == 0) then
       write(*,'(a,2es14.6)') "  yle  range: ", lep_eos_ylemin, lep_eos_ylemax

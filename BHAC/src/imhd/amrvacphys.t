@@ -46,7 +46,7 @@
     use mod_eos
     include 'amrvacdef.f'
     !-----------------------------------------------------------------------------
-    if (eos_type == tabulated) then
+    if (eos_uses_ye()) then
       ! nothing
       smallxi = -1.0d90
     else if (eos_type == idealgas) then
@@ -167,11 +167,17 @@
       {^C&  bD(ixO^S, ^C)  = w(ixO^S, b^C_) * gamma(ixO^S,^C,^C)  \}
 
     {do ix^D = ixO^LIM^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           temp_local = w(ix^D,T_eps_)
           rho_local  = w(ix^D,rho_)
-          call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
-                                         eps_tmp(ix^D),prs=prs_tmp(ix^D))
+          if (eos_has_ymu()) then
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),&
+                                           ymu=w(ix^D,ymu_))
+          else
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D))
+          endif
         else
           eps_tmp(ix^D) = w(ix^D, T_eps_)
           call eos_get_pressure_one_grid(prs_tmp(ix^D),w(ix^D,rho_),eps_tmp(ix^D))
@@ -267,10 +273,17 @@
     endwhere
     !}
 
-    if (eos_type == tabulated) then
+    if (eos_uses_ye()) then
       where(.not.patchw(ixO^S))
          w(ixO^S,Dye_) =  w(ixO^S, d_) * w(ixO^S, ye_)
       endwhere
+      if (eos_has_ymu()) then
+        where(.not.patchw(ixO^S))
+           w(ixO^S,Dymu_) =  w(ixO^S, d_) * w(ixO^S, ymu_)
+        endwhere
+      else
+        w(ixO^S,Dymu_) = 0.0d0
+      endif
     endif
 
   end subroutine conserven
@@ -322,9 +335,14 @@
 
     {do ix^D = ixO^LIM^D \}
         prs_tmp(ix^D) = w(ix^D, pp_)
-        if (eos_type == tabulated) then
-          call eos_get_eps_one_grid(prs_tmp(ix^D), w(ix^D,rho_), eps_tmp(ix^D), w(ix^D,T_eps_),&
-                                    ye=w(ix^D,ye_))
+        if (eos_uses_ye()) then
+          if (eos_has_ymu()) then
+            call eos_get_eps_one_grid(prs_tmp(ix^D), w(ix^D,rho_), eps_tmp(ix^D), w(ix^D,T_eps_),&
+                                      ye=w(ix^D,ye_), ymu=w(ix^D,ymu_))
+          else
+            call eos_get_eps_one_grid(prs_tmp(ix^D), w(ix^D,rho_), eps_tmp(ix^D), w(ix^D,T_eps_),&
+                                      ye=w(ix^D,ye_))
+          endif
         else
           eps_tmp(ix^D) = w(ix^D, T_eps_)
         endif
@@ -427,10 +445,17 @@
     endwhere
     !}
 
-    if (eos_type == tabulated) then
+    if (eos_uses_ye()) then
       where(.not.patchw(ixO^S))
          w(ixO^S,Dye_) =  w(ixO^S, d_) * w(ixO^S, ye_)
       endwhere
+      if (eos_has_ymu()) then
+        where(.not.patchw(ixO^S))
+           w(ixO^S,Dymu_) =  w(ixO^S, d_) * w(ixO^S, ymu_)
+        endwhere
+      else
+        w(ixO^S,Dymu_) = 0.0d0
+      endif
     endif
 
   end subroutine conserven
@@ -582,11 +607,17 @@
         {#IFNDEF DY_SP
           prs_tmp(ixO^S) = w(ixO^S, pp_)
         }
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           temp_local = w(ix^D,T_eps_)
           rho_local  = w(ix^D,rho_)
-          call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
-                                         eps_tmp(ix^D),prs=prs_tmp(ix^D),cs2=cs2_local(ix^D))
+          if (eos_has_ymu()) then
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),&
+                                           cs2=cs2_local(ix^D),ymu=w(ix^D,ymu_))
+          else
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),cs2=cs2_local(ix^D))
+          endif
         else
           eps_tmp(ix^D) = w(ix^D, T_eps_)
           call eos_get_cs2_one_grid(cs2_local(ix^D),w(ix^D,rho_),eps_tmp(ix^D))
@@ -784,11 +815,17 @@
     !-----------------------------------------------------------------------------
 
     {do ix^D = ixO^LIM^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           temp_local = w(ix^D,T_eps_)
           rho_local  = w(ix^D,rho_)
-          call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
-                                         eps_tmp(ix^D),prs=prs_tmp(ix^D),cs2=cs2_local(ix^D))
+          if (eos_has_ymu()) then
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),&
+                                           cs2=cs2_local(ix^D),ymu=w(ix^D,ymu_))
+          else
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),cs2=cs2_local(ix^D))
+          endif
         else
           eps_tmp(ix^D) = w(ix^D, T_eps_)
           call eos_get_cs2_one_grid(cs2_local(ix^D),w(ix^D,rho_),eps_tmp(ix^D))
@@ -976,11 +1013,17 @@
     endif
 
     {do ix^D = ixO^LIM^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           temp_local = wprim(ix^D,T_eps_)
           rho_local  = wprim(ix^D,rho_)
-          call eos_temp_get_all_one_grid(rho_local,temp_local,wprim(ix^D,ye_),&
-                                         eps_tmp(ix^D),prs=prs_tmp(ix^D))
+          if (eos_has_ymu()) then
+            call eos_temp_get_all_one_grid(rho_local,temp_local,wprim(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),&
+                                           ymu=wprim(ix^D,ymu_))
+          else
+            call eos_temp_get_all_one_grid(rho_local,temp_local,wprim(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D))
+          endif
         else
           eps_tmp(ix^D) = wprim(ix^D, T_eps_)
           call eos_get_pressure_one_grid(prs_tmp(ix^D),wprim(ix^D,rho_),eps_tmp(ix^D))
@@ -1052,11 +1095,21 @@
 {^C&    f(ixO^S, u^C_)    =  0.0d0
         transport(u^C_)   = .false.  \}
 
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           f(ixO^S, ye_)     =  0.0d0
           transport(ye_)    = .false.
 ! ------  cons  ------- !
           f(ixO^S, Dye_)    = 0.0d0
+          if (eos_has_ymu()) then
+            f(ixO^S, ymu_)     =  0.0d0
+            transport(ymu_)    = .false.
+            f(ixO^S, Dymu_)    = 0.0d0
+          else
+            f(ixO^S, ymu_)     =  0.0d0
+            transport(ymu_)    = .false.
+            f(ixO^S, Dymu_)    = 0.0d0
+            transport(Dymu_)   = .false.
+          endif
         endif
 
         f(ixO^S, d_)      = 0.0d0
@@ -1750,4 +1803,3 @@ subroutine calheatingrate(wCT,x,ixI^L,ixO^L,fe)
   !=============================================================================
   ! end module amrvacphys
   !=============================================================================
-

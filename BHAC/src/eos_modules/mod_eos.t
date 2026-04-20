@@ -16,6 +16,7 @@ module mod_eos
   integer, parameter                :: idealgas = 2
   integer, parameter                :: hybrid = 3
   integer, parameter                :: tabulated = 4
+  integer, parameter                :: leptonic = 6
 
   
   character(128)                    :: atmo_type
@@ -36,6 +37,8 @@ module mod_eos
   double precision                  :: eos_rhomax  = bigdouble_eos
   double precision                  :: eos_yemin   = smalldouble_eos
   double precision                  :: eos_yemax   = bigdouble_eos
+  double precision                  :: eos_ymumin  = smalldouble_eos
+  double precision                  :: eos_ymumax  = bigdouble_eos
   double precision                  :: eos_tempmin = smalldouble_eos
   double precision                  :: eos_tempmax = bigdouble_eos
   double precision                  :: eos_epsmin  = 0.0d0
@@ -132,64 +135,72 @@ module mod_eos
 
   abstract interface
 
-     subroutine sub_get_eps_range(rho,epsmin,epsmax,ye)
+     subroutine sub_get_eps_range(rho,epsmin,epsmax,ye,ymu)
        double precision, intent(in) :: rho
        double precision, intent(out):: epsmin, epsmax
        double precision, intent(in), optional :: ye
+       double precision, intent(in), optional :: ymu
      end subroutine sub_get_eps_range
 
-     subroutine sub_get_pressure_one_grid(prs,rho,eps,temp,ye)
+     subroutine sub_get_pressure_one_grid(prs,rho,eps,temp,ye,ymu)
        double precision, intent(inout) :: prs
        double precision, intent(in) :: rho
        double precision, intent(in) :: eps
        double precision, intent(in), optional :: ye
+       double precision, intent(in), optional :: ymu
        double precision, intent(inout), optional :: temp
      end subroutine sub_get_pressure_one_grid
    
-     subroutine sub_get_eps_one_grid(prs,rho,eps,temp,ye)
+     subroutine sub_get_eps_one_grid(prs,rho,eps,temp,ye,ymu)
        double precision, intent(in) :: prs
        double precision, intent(in) :: rho
        double precision, intent(inout) :: eps
        double precision, intent(in), optional :: temp, ye
+       double precision, intent(in), optional :: ymu
      end subroutine sub_get_eps_one_grid
 
-     subroutine sub_get_cs2_one_grid(cs2,rho,eps,temp,ye)
+     subroutine sub_get_cs2_one_grid(cs2,rho,eps,temp,ye,ymu)
        double precision, intent(inout) :: cs2
        double precision, intent(in) :: rho
        double precision, intent(in) :: eps
        double precision, intent(in), optional :: ye
+        double precision, intent(in), optional :: ymu
        double precision, intent(inout), optional :: temp
      end subroutine sub_get_cs2_one_grid
 
-     subroutine sub_get_temp_one_grid(rho,eps,temp,ye)
+     subroutine sub_get_temp_one_grid(rho,eps,temp,ye,ymu)
        double precision, intent(in) :: rho
        double precision, intent(in) :: ye
        double precision, intent(inout) :: temp, eps
+       double precision, intent(in), optional :: ymu
      end subroutine sub_get_temp_one_grid
 
-     subroutine sub_get_all_beta_eqm_one_grid(rho,temp,ye,eps,prs)
+     subroutine sub_get_all_beta_eqm_one_grid(rho,temp,ye,eps,prs,ymu)
        double precision, intent(in)    :: rho, temp
        double precision, intent(inout) :: ye
        double precision, intent(inout), optional :: eps, prs
+       double precision, intent(inout), optional :: ymu
      end subroutine sub_get_all_beta_eqm_one_grid
 
      subroutine sub_eps_get_all_one_grid(rho,eps,ye,temp,prs,ent,cs2,dedt,&
-                 dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu)
+                 dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu,ymu)
 
        double precision, intent(inout) :: rho, eps, ye
        double precision, intent(inout), optional :: ent, prs, temp, cs2, dedt
        double precision, intent(inout), optional :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar
-       double precision, intent(inout), optional :: mu_e,mu_n,mu_p,muhat,munu
+       double precision, intent(inout), optional :: mu_e,mu_n,mu_p,mu_mu,muhat,munu
+       double precision, intent(in), optional :: ymu
 
      end subroutine sub_eps_get_all_one_grid
 
      subroutine sub_temp_get_all_one_grid(rho,temp,ye,eps,prs,ent,cs2,dedt,&
-                 dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu)
+                 dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu,ymu)
        double precision, intent(inout) :: rho, eps, temp
        double precision, intent(in) :: ye
 
        double precision, intent(inout), optional :: prs,ent,cs2,dedt,&
-                   dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu
+                   dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu
+       double precision, intent(in), optional :: ymu
 
      end subroutine sub_temp_get_all_one_grid
 
@@ -197,6 +208,14 @@ module mod_eos
   end interface
 
 contains
+
+  logical function eos_uses_ye()
+    eos_uses_ye = (eos_type == tabulated .or. eos_type == leptonic)
+  end function eos_uses_ye
+
+  logical function eos_has_ymu()
+    eos_has_ymu = (eos_type == leptonic)
+  end function eos_has_ymu
 
   subroutine eos_check
 
@@ -213,8 +232,8 @@ contains
          call mpistop("Error: eos_get_cs2_one_grid not defined")
 
     if (.not. associated(eos_get_eps_range)) then
-       if (eos_type == tabulated) &
-         call mpistop("Error: eos_get_eps_range is not defined but using tabulated eos")
+       if (eos_uses_ye()) &
+         call mpistop("Error: eos_get_eps_range is not defined but using table-based eos")
        eos_get_eps_range => unlimited_eps_range
     end if
   end subroutine eos_check
@@ -406,10 +425,11 @@ contains
      cs2 = atmo_cs2
   end subroutine atmo_get_cs2_one_grid
 
-  subroutine unlimited_eps_range(rho, epsmin, epsmax, ye)
+  subroutine unlimited_eps_range(rho, epsmin, epsmax, ye, ymu)
      double precision, intent(in)    :: rho
      double precision, intent(out)   :: epsmin, epsmax
      double precision, intent(in), optional :: ye
+     double precision, intent(in), optional :: ymu
      ! if it is not using tabulated eos
      epsmin = small_eps
      epsmax = bigdouble_eos

@@ -45,7 +45,7 @@ contains
 
   end subroutine eos_idealgas_activate
 
-  subroutine idealgas_get_pressure_one_grid(prs,rho,eps,temp,ye)
+  subroutine idealgas_get_pressure_one_grid(prs,rho,eps,temp,ye,ymu)
 
     use mod_eos
     include 'amrvacdef.f'
@@ -55,6 +55,7 @@ contains
     double precision, intent(in) :: rho
     double precision, intent(in) :: eps
     double precision, intent(in), optional :: ye
+    double precision, intent(in), optional :: ymu
     double precision, intent(inout), optional :: temp
 
     if (.not. old_bhac_safety) then
@@ -68,7 +69,7 @@ contains
 
   end subroutine idealgas_get_pressure_one_grid
 
-  subroutine idealgas_get_eps_one_grid(prs,rho,eps,temp,ye)
+  subroutine idealgas_get_eps_one_grid(prs,rho,eps,temp,ye,ymu)
 
     use mod_eos
     include 'amrvacdef.f'
@@ -77,7 +78,7 @@ contains
     double precision, intent(in) :: prs
     double precision, intent(in) :: rho
     double precision, intent(inout) :: eps
-    double precision, intent(in), optional :: temp, ye
+    double precision, intent(in), optional :: temp, ye, ymu
 
     if (.not. old_bhac_safety) then
       if (rho<small_rho_thr) then
@@ -89,7 +90,7 @@ contains
 
   end subroutine idealgas_get_eps_one_grid
 
-  subroutine idealgas_get_cs2_one_grid(cs2,rho,eps,temp,ye)
+  subroutine idealgas_get_cs2_one_grid(cs2,rho,eps,temp,ye,ymu)
 
     use mod_eos
     include 'amrvacdef.f'
@@ -99,6 +100,7 @@ contains
     double precision, intent(in) :: rho
     double precision, intent(in) :: eps
     double precision, intent(in), optional :: ye
+    double precision, intent(in), optional :: ymu
     double precision, intent(inout), optional :: temp
 
     double precision             :: prs

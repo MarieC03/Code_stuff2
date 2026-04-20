@@ -9,14 +9,13 @@ INCLUDES += mod_m1$F mod_m1_closure$F mod_m1_closure_functions$F mod_m1_metric_i
 mod_m1.o: mod_m1_metric_interface.o mod_m1_closure.o mod_m1_tests.o mod_m1_collisional.o mod_m1_eas.o mod_m1_eas_param.o mod_m1_eas_test.o mod_eos.o mod_m1_backreaction.o
 mod_m1_collisional.o : mod_rootfinding.o mod_m1_closure.o mod_m1_internal.o mod_m1_eas.o #mod_metric_interface.o
 mod_m1_closure.o: mod_rootfinding.o mod_m1_metric_interface.o mod_m1_closure_functions.o mod_m1_tests.o 
-mod_m1_eas.o: amr_ghostcells.o mod_Weakhub_reader.o mod_m1_fermi.o mod_m1_tests.o mod_m1_eas_microphysical_gray.o mod_m1_eas_param.o mod_eos_tabulated.o mod_m1_beta_eq.o mod_m1_constants.o mod_eos.o
+mod_m1_eas.o: amr_ghostcells.o mod_Weakhub_reader.o mod_m1_fermi.o mod_m1_tests.o mod_m1_eas_microphysical_gray.o mod_m1_eas_param.o mod_m1_beta_eq.o mod_m1_constants.o mod_eos.o
 mod_m1_eas_microphysical_gray.o: mod_m1_eas_param.o mod_interpolate.o
 mod_Weakhub_reader.o: mod_weakhub_parameters.o 
 mod_m1_fermi.o: mod_m1_constants.o mod_m1_tests.o mod_m1_internal.o #mod_m1_closure.o 
-mod_m1_beta_eq.o : mod_m1_fermi.o mod_rootfinding.o mod_eos_tabulated.o mod_m1_constants.o mod_lu.o mod_lnsrch.o mod_eos.o
+mod_m1_beta_eq.o : mod_m1_fermi.o mod_rootfinding.o mod_m1_constants.o mod_lu.o mod_lnsrch.o mod_eos.o
 mod_m1_tau_optical.o : mod_m1_eas.o mod_m1_eas_microphysical_gray.o mod_m1_eas_param.o mod_m1_metric_interface.o mod_m1_internal.o mod_m1_constants.o
 mod_m1_outflow.o : mod_m1_metric_interface.o mod_m1_tests.o mod_m1_eas_param.o mod_m1_constants.o
 mod_m1_metric_interface.o: mod_m1_tests.o
 mod_m1_backreaction.o: mod_m1_tests.o mod_m1_eas.o mod_m1_eas_test.o mod_eos.o mod_m1_eas_param.o mod_m1_internal.o
-mod_m1_diagnostics.o : mod_m1_closure.o mod_m1_fermi.o mod_rootfinding.o mod_eos_tabulated.o mod_eos.o mod_m1_constants.o mod_m1_eas_param.o mod_m1_internal.o
-
+mod_m1_diagnostics.o : mod_m1_closure.o mod_m1_fermi.o mod_rootfinding.o mod_eos.o mod_m1_constants.o mod_m1_eas_param.o mod_m1_internal.o

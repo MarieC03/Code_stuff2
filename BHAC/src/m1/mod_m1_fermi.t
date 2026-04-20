@@ -159,7 +159,7 @@ contains
    integer, intent(in) :: ix^D
    integer, intent(in) :: speciesKSP
    double precision, intent(inout) :: wrad(1:m1_numvars_internal)
-   double precision, intent(inout) :: fluid_Prim(1:3)
+   double precision, intent(inout) :: fluid_Prim(1:fluid_vars)
    double precision, intent(in)    :: Gamma, Wlor, Jrad
    double precision, intent(in)    :: velU(1:^NC) 
    double precision, intent(in)    :: N
@@ -229,7 +229,7 @@ contains
       double precision, intent(in) :: eta
       double precision, intent(in) :: T_fluid 
       double precision, intent(inout) :: wrad(1:m1_numvars_internal)
-      double precision, intent(in) :: fluid_Prim(1:3)
+      double precision, intent(in) :: fluid_Prim(1:fluid_vars)
       double precision, intent(out) :: Black_er,Black_nr
       ! internal: 
       double precision, dimension(1:6) :: g_fact
@@ -272,6 +272,5 @@ contains
    end subroutine blackbody_ixD
 
 end module mod_m1_fermi
-
 
 

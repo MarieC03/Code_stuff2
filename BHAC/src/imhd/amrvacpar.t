@@ -165,6 +165,7 @@ integer, allocatable  :: iws(:)
 !=====Conserve variables=====!
 integer:: d_           = 1000
 integer:: Dye_         = 1000
+integer:: Dymu_        = 1000
 integer:: s0_          = 1000
 {#IFNDEF UNIT_TESTS
 integer:: s1_          = 1000
@@ -183,6 +184,7 @@ integer:: rhos_        = 1000
 !=====Primitive variables=====!
 {#IFNDEF UNIT_TESTS
 integer:: ye_          = 1000
+integer:: ymu_         = 1000
 integer:: cs2_         = 1000
 integer:: rho_         = 1000
 integer:: u0_          = 1000

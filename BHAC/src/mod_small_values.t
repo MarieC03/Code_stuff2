@@ -63,7 +63,7 @@ contains
 
          ! Not diagonal ghostzones
     !if ( (x(1) .ge. 0.0d0 .and. x(2) < 0.0d0) .or. (x(1) < 0.0d0 .and. x(2) .ge. 0.0d0)) then
-      if (eos_type == tabulated) then
+      if (eos_uses_ye()) then
          if (w(rho_) .gt. eos_rhomax) then
              write(*,*) 'w(rho_), eos_rhomax, x(1:ndim)'
              write(*,*) w(rho_), eos_rhomax, x(1:ndim)
@@ -75,6 +75,20 @@ contains
              write(*,*) w(ye_), eos_yemin, x(1:ndim)
              write(*,*) 'Location at  ', Location
            call mpistop("ye < eosmin in this location")
+         endif
+         if (eos_has_ymu()) then
+            if (w(ymu_) .lt. eos_ymumin) then
+                write(*,*) 'w(ymu_), eos_ymumin, x(1:ndim)'
+                write(*,*) w(ymu_), eos_ymumin, x(1:ndim)
+                write(*,*) 'Location at  ', Location
+              call mpistop("ymu < eosmin in this location")
+            endif
+            if (w(ymu_) .gt. eos_ymumax) then
+                write(*,*) 'w(ymu_), eos_ymumax, x(1:ndim)'
+                write(*,*) w(ymu_), eos_ymumax, x(1:ndim)
+                write(*,*) 'Location at  ', Location
+              call mpistop("ymu > eosmax in this location")
+            endif
          endif
       endif
     

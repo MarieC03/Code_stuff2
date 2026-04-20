@@ -29,7 +29,7 @@ module mod_m1_tau_optical
     integer :: ix^D, ixO^L
     double precision :: dummy = 1.0d0
     double precision :: eas_eq(1:m1_num_eas)        !>eq. rates
-    double precision, dimension(1:3) :: fluid_Prim  !> fluid vars
+    double precision, dimension(1:fluid_vars) :: fluid_Prim  !> fluid vars
     double precision, dimension(1:m1_numvars_internal) :: wrad
     type(m1_metric_helper) :: metricM1
     ! internal for tau
@@ -55,9 +55,11 @@ module mod_m1_tau_optical
     !> get equilibrium opacities kappa
     {do ix^D=ixOmin^D,ixOmax^D \}
 
+      fluid_Prim(:) = 0.0d0
       fluid_Prim(idx_rho) = wprim(ix^D,rho_) 
       fluid_Prim(idx_T) = wprim(ix^D,T_eps_) 
       fluid_Prim(idx_Ye) = wprim(ix^D,Ye_) 
+      if (m1_use_muons) fluid_Prim(idx_Ymu) = wprim(ix^D,Ymu_)
 
       {^KSP&  !+++++++++++
 

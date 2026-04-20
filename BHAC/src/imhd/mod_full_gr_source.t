@@ -575,11 +575,17 @@ module mod_full_gr_source
     call lower3(ixI^L,ixO^L,myM,bsU,bsD)
 
     {do ix^D = ixO^LIM^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           temp_local = wCT(ix^D,T_eps_)
           rho_local  = wCT(ix^D,rho_)
-          call eos_temp_get_all_one_grid(rho_local,temp_local,wCT(ix^D,ye_),&
-                                         eps_tmp(ix^D),prs=prs_tmp(ix^D))
+          if (eos_has_ymu()) then
+            call eos_temp_get_all_one_grid(rho_local,temp_local,wCT(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D),&
+                                           ymu=wCT(ix^D,ymu_))
+          else
+            call eos_temp_get_all_one_grid(rho_local,temp_local,wCT(ix^D,ye_),&
+                                           eps_tmp(ix^D),prs=prs_tmp(ix^D))
+          endif
         else
           eps_tmp(ix^D) = wCT(ix^D, T_eps_)
           call eos_get_pressure_one_grid(prs_tmp(ix^D),wCT(ix^D,rho_),eps_tmp(ix^D))

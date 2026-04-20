@@ -3,8 +3,8 @@ module mod_m1_beta_eq
   use mod_m1_eas_param
   use mod_m1_fermi
   use mod_m1_constants
-  use mod_eos_tabulated 
-  use mod_eos, only: eos_rhomin, eos_rhomax, eos_yemin, eos_yemax, eos_tempmin, eos_tempmax
+  use mod_eos, only: eos_rhomin, eos_rhomax, eos_yemin, eos_yemax, eos_tempmin, eos_tempmax, &
+       eos_ymumin, eos_temp_get_all_one_grid, eos_has_ymu
   use mod_rootfinding, only: rootfinding_global_multid_newton_raphson, numerical_jacobian
 
   implicit none
@@ -23,9 +23,9 @@ module mod_m1_beta_eq
   integer, parameter :: m1_beta_ndim = 2
 
   type m1_beta_eq_helpers
-    double precision :: eta_nu_e, eta_nu_ebar, eta_nu_x
-    double precision :: J_nu_e, J_nu_ebar, J_nu_x
-    double precision :: fluid_prim_rho, fluid_prim_ye, fluid_prim_T, fluid_prim_eps
+    double precision :: eta_nu_e, eta_nu_ebar, eta_nu_x, eta_nu_mu, eta_nu_mubar
+    double precision :: J_nu_e, J_nu_ebar, J_nu_x, J_nu_mu, J_nu_mubar
+    double precision :: fluid_prim_rho, fluid_prim_ye, fluid_prim_ymu, fluid_prim_T, fluid_prim_eps
     double precision :: N_KSP1,N_KSP2
   end type m1_beta_eq_helpers
   
@@ -43,32 +43,51 @@ contains
     integer :: error
     double precision :: z_vec(1:2)
     double precision :: eps,prs,ent,cs2,dedt
-    double precision :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu
-    double precision :: T_fluid, Ye_fluid, rho_fluid
+    double precision :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu
+    double precision :: T_fluid, Ye_fluid, Ymu_fluid, rho_fluid
 
     stateEQ%fluid_prim_rho = fluid_Prim(idx_rho)
     stateEQ%fluid_prim_Ye = fluid_Prim(idx_ye)
     stateEQ%fluid_prim_T = fluid_Prim(idx_T)
+    stateEQ%fluid_prim_ymu = eos_ymumin
+    if (m1_i_mu > 0) stateEQ%fluid_prim_ymu = fluid_Prim(idx_ymu)
 
     rho_fluid = stateEQ%fluid_prim_rho
     Ye_fluid = stateEQ%fluid_prim_Ye
     T_fluid = stateEQ%fluid_prim_T
+    Ymu_fluid = stateEQ%fluid_prim_ymu
     
     if(Ye_fluid > eos_yemax) write(*,*) "how"
-    call tabulated_temp_get_all_one_grid(rho_fluid,T_fluid,Ye_fluid,eps,prs=prs,ent=ent,&
-    cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
-    abar=abar,zbar=zbar,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+    if (eos_has_ymu()) then
+      call eos_temp_get_all_one_grid(rho_fluid,T_fluid,Ye_fluid,eps,prs=prs,ent=ent,&
+      cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+      abar=abar,zbar=zbar,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,mu_mu=mu_mu,muhat=muhat,munu=munu,&
+      ymu=Ymu_fluid)
+    else
+      call eos_temp_get_all_one_grid(rho_fluid,T_fluid,Ye_fluid,eps,prs=prs,ent=ent,&
+      cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+      abar=abar,zbar=zbar,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+      mu_mu = 0.0d0
+    end if
 
     stateEQ%fluid_prim_eps = eps 
 
     !> fluid frame J
-    stateEQ%J_nu_e = Jrad_closure(1)
-    stateEQ%J_nu_ebar = Jrad_closure(2)
-    stateEQ%J_nu_x = Jrad_closure(3)
+    stateEQ%J_nu_e = 0.0d0
+    stateEQ%J_nu_ebar = 0.0d0
+    stateEQ%J_nu_x = 0.0d0
+    stateEQ%J_nu_mu = 0.0d0
+    stateEQ%J_nu_mubar = 0.0d0
+    if (m1_i_nue > 0) stateEQ%J_nu_e = Jrad_closure(m1_i_nue)
+    if (m1_i_nuebar > 0) stateEQ%J_nu_ebar = Jrad_closure(m1_i_nuebar)
+    if (m1_i_nux > 0) stateEQ%J_nu_x = Jrad_closure(m1_i_nux)
+    if (m1_i_mu > 0) stateEQ%J_nu_mu = Jrad_closure(m1_i_mu)
+    if (m1_i_mubar > 0) stateEQ%J_nu_mubar = Jrad_closure(m1_i_mubar)
 
-    stateEQ%N_KSP1 = N_KSP(1)
-    stateEQ%N_KSP2 = N_KSP(2)
-    if(^NS .lt. 2) stateEQ%N_KSP2 = 0.0d0
+    stateEQ%N_KSP1 = 0.0d0
+    stateEQ%N_KSP2 = 0.0d0
+    if (m1_i_nue > 0) stateEQ%N_KSP1 = N_KSP(m1_i_nue)
+    if (m1_i_nuebar > 0) stateEQ%N_KSP2 = N_KSP(m1_i_nuebar)
 
     !> first guess:
     z_vec(1) = stateEQ%fluid_prim_Ye !Ye_eq
@@ -132,10 +151,10 @@ contains
     double precision, parameter :: PENALTY = 1.0d30
     double precision :: Yl,Y_nu,Y_nue,Y_nue_bar,Y_rhs
     double precision :: e,u,eps_internal,chem_pot
-    double precision :: Z_nu,Z_nue,Z_nue_bar,Z_nux
+    double precision :: Z_nu,Z_nue,Z_nue_bar,Z_nux,Z_numu,Z_numubar
     double precision :: eps,prs,ent,cs2,dedt
-    double precision :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,muhat,munu
-    double precision :: eta_nu(5),Tequil,Yeequil
+    double precision :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu
+    double precision :: eta_nu(^NS),Tequil,Yeequil
     double precision :: rho_cgs
 
     Tequil = z_vec(2)
@@ -149,35 +168,46 @@ contains
         return
     endif
 
-    call tabulated_temp_get_all_one_grid(stateEQ%fluid_prim_rho,Tequil,Yeequil,eps,prs=prs,ent=ent,&
-    cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
-    abar=abar,zbar=zbar,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+    if (eos_has_ymu()) then
+      call eos_temp_get_all_one_grid(stateEQ%fluid_prim_rho,Tequil,Yeequil,eps,prs=prs,ent=ent,&
+      cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+      abar=abar,zbar=zbar,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,mu_mu=mu_mu,muhat=muhat,munu=munu,&
+      ymu=stateEQ%fluid_prim_ymu)
+    else
+      call eos_temp_get_all_one_grid(stateEQ%fluid_prim_rho,Tequil,Yeequil,eps,prs=prs,ent=ent,&
+      cs2=cs2,dedt=dedt,dpderho=dpderho,dpdrhoe=dpdrhoe,xa=xa,xh=xh,xn=xn,xp=xp,&
+      abar=abar,zbar=zbar,mu_e=mu_e,mu_n=mu_n,mu_p=mu_p,muhat=muhat,munu=munu)
+      mu_mu = 0.0d0
+    end if
 
     ! Compute eta_nu from chemical potentials
     {^KSP&
-    if(^KSP .eq.1) then
+    if(^KSP .eq. m1_i_nue) then
       chem_pot = mu_e + mu_p - mu_n - Qnp
-    else if(^KSP .eq.2) then
+    else if(^KSP .eq. m1_i_nuebar) then
       chem_pot = -1.0d0*(mu_e + mu_p - mu_n - Qnp)
-    else if(^KSP .eq.3) then
+    else if(^KSP .eq. m1_i_nux) then
       chem_pot = 0.0d0
-    else if(^KSP .eq.4) then
-      chem_pot = 0.0d0
-    else if(^KSP .eq.5)then
+    else if(^KSP .eq. m1_i_mu) then
+      chem_pot = mu_mu + mu_p - mu_n - Qnp
+    else if(^KSP .eq. m1_i_mubar)then
+      chem_pot = -1.0d0*(mu_mu + mu_p - mu_n - Qnp)
+    else
       chem_pot = 0.0d0
     end if 
     eta_nu(^KSP) = chem_pot/Tequil
     \}
 
-    if(^NS .ge. 1) then
-      stateEQ%eta_nu_e = eta_nu(1)
-    end if
-    if(^NS .ge. 2) then
-      stateEQ%eta_nu_ebar = eta_nu(2)
-    end if 
-    if(^NS .ge. 3) then
-      stateEQ%eta_nu_x = eta_nu(3)
-    end if
+    stateEQ%eta_nu_e = 0.0d0
+    stateEQ%eta_nu_ebar = 0.0d0
+    stateEQ%eta_nu_x = 0.0d0
+    stateEQ%eta_nu_mu = 0.0d0
+    stateEQ%eta_nu_mubar = 0.0d0
+    if (m1_i_nue > 0) stateEQ%eta_nu_e = eta_nu(m1_i_nue)
+    if (m1_i_nuebar > 0) stateEQ%eta_nu_ebar = eta_nu(m1_i_nuebar)
+    if (m1_i_nux > 0) stateEQ%eta_nu_x = eta_nu(m1_i_nux)
+    if (m1_i_mu > 0) stateEQ%eta_nu_mu = eta_nu(m1_i_mu)
+    if (m1_i_mubar > 0) stateEQ%eta_nu_mubar = eta_nu(m1_i_mubar)
 
     ! ====================================================================
     ! CRITICAL: Convert density from geometrized units to CGS
@@ -199,8 +229,12 @@ contains
     Y_nu = 4.0d0 * Pi_const / (hc_const**3) * mb_msun / stateEQ%fluid_prim_rho * &
            (Tequil)**3 * exp(-rho0 / rho_cgs)
     
-    Y_nue = Y_nu * fermi_dirac(stateEQ%eta_nu_e, 2)
-    if(^NS .ge. 2) then
+    if(m1_i_nue > 0) then
+      Y_nue = Y_nu * fermi_dirac(stateEQ%eta_nu_e, 2)
+    else
+      Y_nue = 0.0d0
+    end if
+    if(m1_i_nuebar > 0) then
       Y_nue_bar = Y_nu * fermi_dirac(stateEQ%eta_nu_ebar, 2)
     else 
       Y_nue_bar = 0.0d0
@@ -220,7 +254,8 @@ contains
     eps_internal = stateEQ%fluid_prim_eps
     !e = (1.0d0 + stateEQ%fluid_prim_rho) * eps_internal
     e = (1.0d0 + eps_internal) * stateEQ%fluid_prim_rho
-    u = e + stateEQ%J_nu_e + stateEQ%J_nu_ebar + stateEQ%J_nu_x
+    u = e + stateEQ%J_nu_e + stateEQ%J_nu_ebar + stateEQ%J_nu_x + &
+        stateEQ%J_nu_mu + stateEQ%J_nu_mubar
 
     ! New matter energy density (with equilibrium temperature)
     eps_internal = eps
@@ -235,22 +270,40 @@ contains
     !       (Tequil)**4 * exp(-rho0 / rho_cgs)
     Z_nu = 4.0d0 * Pi_const / (hc_const**3) * (Tequil)**4 * exp(-rho0 / rho_cgs)*MEV_TO_ERG_KEN * EPSGF * RHOGF 
     
-    Z_nue = Z_nu * fermi_dirac(stateEQ%eta_nu_e, 3)
-    if(^NS .ge. 2) then
+    if(m1_i_nue > 0) then
+      Z_nue = Z_nu * fermi_dirac(stateEQ%eta_nu_e, 3)
+    else
+      Z_nue = 0.0d0
+    end if
+    if(m1_i_nuebar > 0) then
       Z_nue_bar = Z_nu * fermi_dirac(stateEQ%eta_nu_ebar, 3)
     else
       Z_nue_bar = 0.0d0
     end if 
-    if(^NS .ge. 3) then
+    if(m1_i_nux > 0) then
       Z_nux = Z_nu * fermi_dirac(stateEQ%eta_nu_x, 3)
     else
       Z_nux = 0.0d0
+    end if
+    if(m1_i_mu > 0) then
+      Z_numu = Z_nu * fermi_dirac(stateEQ%eta_nu_mu, 3)
+    else
+      Z_numu = 0.0d0
+    end if
+    if(m1_i_mubar > 0) then
+      Z_numubar = Z_nu * fermi_dirac(stateEQ%eta_nu_mubar, 3)
+    else
+      Z_numubar = 0.0d0
     end if 
     
     ! Residual 2: Energy conservation
     ! Note: ρ/m_b = n_b (baryon number density in CGS)
     !m1_beta_equilib_function(2) = -u + e + rho_cgs/mb * (Z_nue + Z_nue_bar + 4.0d0*Z_nux)
-    m1_beta_equilib_function(2) = -u + e + (Z_nue + Z_nue_bar + 4.0d0*Z_nux)
+    if ((m1_i_mu > 0) .or. (m1_i_mubar > 0)) then
+      m1_beta_equilib_function(2) = -u + e + (Z_nue + Z_nue_bar + Z_numu + Z_numubar + 2.0d0*Z_nux)
+    else
+      m1_beta_equilib_function(2) = -u + e + (Z_nue + Z_nue_bar + 4.0d0*Z_nux)
+    end if
 
   end function m1_beta_equilib_function
 
@@ -422,4 +475,3 @@ end subroutine betaeq_rootfinding_bounded_newton_raphson
 end subroutine m1_get_beta_equilibrium
 
 end module mod_m1_beta_eq
-

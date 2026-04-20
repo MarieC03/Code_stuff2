@@ -10,7 +10,8 @@ module mod_m1_backreaction
   
       use mod_m1_internal
       use mod_m1_eas
-      use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin 
+      use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin, eos_ymumin, eos_ymumax, &
+           eos_uses_ye, eos_has_ymu
       use mod_Weakhub_reader, only: logtemp_min_IV, logtemp_max_IV,ye_min_IV, ye_max_IV,logrho_min_IV,logrho_max_IV
       use mod_m1_eas_param
       
@@ -30,7 +31,8 @@ module mod_m1_backreaction
      logical, intent(inout) :: number_good
      logical, intent(inout) :: proton_number_good
      ! internal
-     double precision :: sources_tmp, tau_tmp, ye_tmp, dye_tmp, error_Ye, Delta_Ye
+     double precision :: sources_tmp, sources_dye_tmp, sources_dymu_tmp
+     double precision :: tau_tmp, ye_tmp, ymu_tmp, dye_tmp, dymu_tmp, error_Ye, Delta_Ye
      double precision :: rel_error_Ye = 1.0d-3
      integer, dimension(1:6) :: signum
      integer :: i
@@ -68,43 +70,52 @@ module mod_m1_backreaction
      else
         energy_good = .true.
      endif 
+     number_good = .true.
+     proton_number_good = .true.
      {#IFDEF TABEOS
-       ! check if ye with sum of number-sources is within range:
-         sources_tmp = 0.0d0 !KEN added signum
-         {^KSP& sources_tmp  =  sources_tmp + signum(^KSP) * sources(1+^NC+1,^KSP) \}
-         dye_tmp = wcons(ix^D,dye_) - qdt*dtfactor * sources_tmp
+       if (eos_uses_ye()) then
+         ! check if Ye with the sum of electron-flavor number sources is within range
+         sources_dye_tmp = 0.0d0
+         sources_dymu_tmp = 0.0d0
+         {^KSP&
+         if ((^KSP .eq. m1_i_nue) .or. (^KSP .eq. m1_i_nuebar)) then
+           sources_dye_tmp = sources_dye_tmp + signum(^KSP) * sources(1+^NC+1,^KSP)
+         else if (m1_use_muons .and. ((^KSP .eq. m1_i_mu) .or. (^KSP .eq. m1_i_mubar))) then
+           sources_dymu_tmp = sources_dymu_tmp + signum(^KSP) * sources(1+^NC+1,^KSP)
+         end if
+         \}
+
+         dye_tmp = wcons(ix^D,dye_) - qdt*dtfactor * sources_dye_tmp
          ye_tmp = dye_tmp / wcons(ix^D,d_)
-       !  Delta_Ye = dabs( ye_tmp - wcons(ix^D,dye_)/ wcons(ix^D,d_))
-       !  error_Ye = Delta_Ye / rel_error_Ye
-         if(ye_tmp < eos_yemin .or. ye_tmp > big_ye) then
+         number_good = .true.
+         if (ye_tmp < eos_yemin .or. ye_tmp > big_ye) then
            number_good = .false.
-       ! else if(error_Ye > 10.0d0) then
-       !   number_good = .false.
-         else 
-            number_good = .True.
-         end if 
-      !if(m1_use_muons) then
-      !   sources_tmp = 0.0d0
-      !   {KSP sources_tmp  =  sources_tmp + sources(1+^NC+2,^KSP) }
-      !   dyp_tmp = wcons(ix^D,dyp_) - qdt*dtfactor * sources_tmp
-      !   yp_tmp = dyp_tmp / wcons(ix^D,d_)
-      ! !  Delta_Yp = dabs( yp_tmp - wcons(ix^D,dyp_)/ wcons(ix^D,d_))
-      ! !  error_Yp = Delta_Yp / rel_error_Yp
-      !   if(yp_tmp < eos_ypmin .or. yp_tmp > big_yp) then
-      !     proton_number_good = .false.
-      ! ! else if(error_Yp > 10.0d0) then
-      ! !   proton_number_good = .false.
-      !   else 
-      !      proton_number_good = .True.
-      !   end if 
-      !end if 
+         end if
+
+         proton_number_good = .true.
+         if (eos_has_ymu()) then
+           dymu_tmp = wcons(ix^D,dymu_) - qdt*dtfactor * sources_dymu_tmp
+           ymu_tmp = dymu_tmp / wcons(ix^D,d_)
+           if (ymu_tmp < eos_ymumin .or. ymu_tmp > eos_ymumax) then
+             number_good = .false.
+             proton_number_good = .false.
+           end if
+         end if
+       else
+         number_good = .true.
+         proton_number_good = .true.
+       end if
      }
      {^KSP&
        if(energy_good) then 
             wcons(ix^D,tau_) = wcons(ix^D,tau_) - qdt*dtfactor * sources(1,^KSP)
        end if 
-       if(number_good) then          
-              wcons(ix^D,dye_) = wcons(ix^D,dye_) - qdt*dtfactor * signum(^KSP)* sources(1+^NC+1,^KSP)
+       if(number_good) then
+         if ((^KSP .eq. m1_i_nue) .or. (^KSP .eq. m1_i_nuebar)) then
+              wcons(ix^D,dye_) = wcons(ix^D,dye_) - qdt*dtfactor * signum(^KSP) * sources(1+^NC+1,^KSP)
+         else if (eos_has_ymu() .and. ((^KSP .eq. m1_i_mu) .or. (^KSP .eq. m1_i_mubar))) then
+              wcons(ix^D,dymu_) = wcons(ix^D,dymu_) - qdt*dtfactor * signum(^KSP) * sources(1+^NC+1,^KSP)
+         end if
        end if 
        
        {^C& wcons(ix^D,s^C_) = wcons(ix^D,s^C_) - qdt*dtfactor * sources(1+^C,^KSP) \}

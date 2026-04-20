@@ -18,7 +18,7 @@ module mod_variables
 
   ! DY_SP:    D_,  s^C_, tau_, b1_, b2_, b3_, T_eps_, rho_, u^C_, metric
   ! nonDY_SP: D_,  s^C_, tau_, b1_, b2_, b3_, pp_, T_eps_, rho_, u^C_, lfac_, xi_, mygeo (myM)
-  ! define TABEOS, have two extra: Dye_, ye_
+  ! define TABEOS, have four extra leptonic slots: Dye_, Dymu_, ye_, ymu_
   ! define GW_BR, have three extra: U_br_, U_br1_, U_br2_, U_br3_, R_br_, U5_br_, h_00_
   ! define M1, have 5species extra: nrad1_, erad1_, frad11_, frad12_, frad13_ ...
 
@@ -34,6 +34,7 @@ contains
       D_     = var_set_wvar(cons_var, need_rec=.false., fill_bc=.true.)  
 {#IFDEF TABEOS
       Dye_   = var_set_wvar(cons_var, need_rec=.false., fill_bc=.true.)  
+      Dymu_  = var_set_wvar(cons_var, need_rec=.false., fill_bc=.true.)  
 }
 {^C&  s^C_   = var_set_wvar(cons_var, need_rec=.false., fill_bc=.true., &
                             vector=.true., ix=^C)  \}
@@ -145,6 +146,7 @@ contains
       T_eps_ = var_set_wvar(prim_var, need_rec=.true., fill_bc=.true.) 
 {#IFDEF TABEOS
       ye_    = var_set_wvar(prim_var, need_rec=.true., fill_bc=.true.) 
+      ymu_   = var_set_wvar(prim_var, need_rec=.true., fill_bc=.true.) 
 }
       rho_   = var_set_wvar(prim_var, need_rec=.true., fill_bc=.true.) 
 {^C&  u^C_   = var_set_wvar(prim_var, need_rec=.true., fill_bc=.true.,&

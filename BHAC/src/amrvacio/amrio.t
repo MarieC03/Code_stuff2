@@ -227,6 +227,8 @@ use mod_cfc, only: cfc_solver_activate
 use mod_gw_br
 use mod_eos_tabulated_parameters
 use mod_eos_tabulated
+use mod_eos_leptonic_parameters
+use mod_eos_leptonic
 use mod_eos_idealgas
 use mod_eos_hybrid
 use mod_eos_polytrope
@@ -305,7 +307,10 @@ namelist /cfclist/    cfc_evolve, cfc_smallest_dt, cfc_dit_update, cfc_dt_update
 namelist /eoslist/    eos_type_input, atmo_type, table_type_input, eos_table_name, &
                       eos_gamma, eos_adiab, eos_gamma_th, massn_cgs, &
                       small_rho, small_rho_thr, small_rho_fac, &
-                      small_temp, atmo_gamma, atmo_adiab, use_realistic_mp_table
+                      small_temp, atmo_gamma, atmo_adiab, use_realistic_mp_table, &
+                      baryon_table_type, baryon_table_name, leptonic_table_name, &
+                      lep_use_muons, lep_add_ele_contribution, lep_fix_ymu_high_yp, &
+                      lep_extend_table_high
 
 namelist /outflowlist/  healpix_det_open, healpix_det_num, healpix_det_radii, healpix_det_zsymm, &
                       healpix_var_num, healpix_vname_str, healpix_nside
@@ -877,6 +882,7 @@ if (mype == 0) then
 
     print*,'d_            :', d_           , 'reconstruct?', var_reconstruct(d_)
     print*,'dye_          :', dye_         , 'reconstruct?', var_reconstruct(dye_)
+    print*,'dymu_         :', dymu_        , 'reconstruct?', var_reconstruct(dymu_)
     print*,'s1_           :', s1_          , 'reconstruct?', var_reconstruct(s1_)
     print*,'s2_           :', s2_          , 'reconstruct?', var_reconstruct(s2_)
     print*,'s3_           :', s3_          , 'reconstruct?', var_reconstruct(s3_)
@@ -885,6 +891,7 @@ if (mype == 0) then
     print*,'Dtr1_         :', Dtr1_        , 'reconstruct?', var_reconstruct(Dtr1_)
     print*,'pp_           :', pp_          , 'reconstruct?', var_reconstruct(pp_)
     print*,'ye_           :', ye_          , 'reconstruct?', var_reconstruct(ye_)
+    print*,'ymu_          :', ymu_         , 'reconstruct?', var_reconstruct(ymu_)
     print*,'rho_          :', rho_         , 'reconstruct?', var_reconstruct(rho_)
     print*,'u1_           :', u1_          , 'reconstruct?', var_reconstruct(u1_)
     print*,'u2_           :', u2_          , 'reconstruct?', var_reconstruct(u2_)
@@ -1156,17 +1163,19 @@ case("polytrope")
   call eos_polytrope_activate()
 case("hybrid")
   call eos_hybrid_activate()
+case("leptonic")
+  call eos_leptonic_activate()
 case default
   call mpistop('pls specify eos type or you missed the eos type input in para file')
 end select
 {#IFNDEF TABEOS
-  if (eos_type == tabulated) then
-     call mpistop('using tabulated eos, please define TABEOS in defintion file first')
+  if (eos_uses_ye()) then
+     call mpistop('using a table-based Ye EOS, please define TABEOS in definition file first')
   endif
 }
 {#IFDEF TABEOS
-  if (eos_type /= tabulated) then
-     call mpistop('You defined TABEOS in definition, if you dont use tabeos, pls undefine it')
+  if (.not. eos_uses_ye()) then
+     call mpistop('You defined TABEOS in definition, if you do not use a table-based EOS, please undefine it')
   endif
 }
 

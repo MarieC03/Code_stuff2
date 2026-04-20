@@ -358,11 +358,16 @@ contains
     is_primitive = .true.
 
     {do ix^D = ixO^LIM^D \}
-        if (eos_type == tabulated) then
+        if (eos_uses_ye()) then
           temp_local = w(ix^D,T_eps_)
           rho_local  = w(ix^D,rho_)
-          call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
-                                         eps_tmp(ix^D))
+          if (eos_has_ymu()) then
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D),ymu=w(ix^D,ymu_))
+          else
+            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                           eps_tmp(ix^D))
+          endif
         else
           eps_tmp(ix^D) = w(ix^D, T_eps_)
         endif

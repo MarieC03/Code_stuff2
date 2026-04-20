@@ -47,7 +47,7 @@ contains
 
   end subroutine eos_polytrope_activate
 
-  subroutine polytrope_get_pressure_one_grid(prs,rho,eps,temp,ye)
+  subroutine polytrope_get_pressure_one_grid(prs,rho,eps,temp,ye,ymu)
 
     use mod_eos
     implicit none
@@ -56,6 +56,7 @@ contains
     double precision, intent(in) :: rho
     double precision, intent(in) :: eps
     double precision, intent(in), optional :: ye
+    double precision, intent(in), optional :: ymu
     double precision, intent(inout), optional :: temp
 
    ! if (rho<small_rho_thr) then
@@ -66,14 +67,14 @@ contains
 
   end subroutine polytrope_get_pressure_one_grid
 
-  subroutine polytrope_get_eps_one_grid(prs,rho,eps,temp,ye)
+  subroutine polytrope_get_eps_one_grid(prs,rho,eps,temp,ye,ymu)
 
     use mod_eos
     implicit none
     
     double precision, intent(in) :: prs
     double precision, intent(in) :: rho
-    double precision, intent(in), optional :: temp, ye
+    double precision, intent(in), optional :: temp, ye, ymu
     double precision, intent(inout) :: eps
 
    ! if (rho<small_rho_thr) then
@@ -87,7 +88,7 @@ contains
 
   end subroutine polytrope_get_eps_one_grid
 
-  subroutine polytrope_get_cs2_one_grid(cs2,rho,eps,temp,ye)
+  subroutine polytrope_get_cs2_one_grid(cs2,rho,eps,temp,ye,ymu)
 
     use mod_eos
     implicit none
@@ -96,6 +97,7 @@ contains
     double precision, intent(in) :: rho
     double precision, intent(in) :: eps
     double precision, intent(in), optional :: ye
+    double precision, intent(in), optional :: ymu
     double precision, intent(inout), optional :: temp
 
     double precision             :: prs, h

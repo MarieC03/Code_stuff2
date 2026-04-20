@@ -127,11 +127,17 @@ module mod_imhd_intermediate
  
     if ( present(Ptot) .or. present(h_th) .or. present(htot) .or. present(P_th) .or. present(eps) .or. present(ub_bernoulli) ) then
        {do ix^D = ixO^LIM^D \}
-         if (eos_type == tabulated) then
+         if (eos_uses_ye()) then
            temp_local = w(ix^D, T_eps_)
            rho_local  = w(ix^D, rho_)
-           call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
-                                          eps_tmp(ix^D),prs=prs_tmp(ix^D))
+           if (eos_has_ymu()) then
+             call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                            eps_tmp(ix^D),prs=prs_tmp(ix^D),&
+                                            ymu=w(ix^D,ymu_))
+           else
+             call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+                                            eps_tmp(ix^D),prs=prs_tmp(ix^D))
+           endif
          else
            eps_tmp(ix^D) = w(ix^D, T_eps_)
            call eos_get_pressure_one_grid(prs_tmp(ix^D),w(ix^D,rho_),eps_tmp(ix^D))
@@ -270,9 +276,10 @@ module mod_imhd_intermediate
           if ( w(ix^D, rho_) < small_rho_thr ) then
              ! atmosphere handling
              w(ix^D, rho_)   = small_rho 
-             if (eos_type == tabulated) then
+             if (eos_uses_ye()) then
                w(ix^D, T_eps_) = small_temp
                w(ix^D, ye_)    = big_ye    ! depends on input data
+               if (eos_has_ymu()) w(ix^D, ymu_) = eos_ymumin
              else
                w(ix^D, T_eps_) = small_eps
              endif
@@ -284,11 +291,17 @@ module mod_imhd_intermediate
              }
           else
              ! this is not atmosphere
-             if (eos_type == tabulated) then
+             if (eos_uses_ye()) then
                if ( ( w(ix^D, ye_) < eos_yemin ) .or. ( w(ix^D, ye_) > eos_yemax ) ) then
                   w(ix^D, ye_) = max(eos_yemin, min(eos_yemax, w(ix^D, ye_)))
                   need_to_fix_eos = .True.
                end if
+               if (eos_has_ymu()) then
+                 if ( ( w(ix^D, ymu_) < eos_ymumin ) .or. ( w(ix^D, ymu_) > eos_ymumax ) ) then
+                    w(ix^D, ymu_) = max(eos_ymumin, min(eos_ymumax, w(ix^D, ymu_)))
+                    need_to_fix_eos = .True.
+                 end if
+               endif
 
                if ( ( w(ix^D, T_eps_) < eos_tempmin ) .or. ( w(ix^D, T_eps_) > eos_tempmax ) ) then
                   w(ix^D, T_eps_) = max(eos_tempmin, min(eos_tempmax, w(ix^D, T_eps_)))
@@ -330,9 +343,14 @@ module mod_imhd_intermediate
     }
     {#IFNDEF DY_SP
     ! it has pp_ only
-    if (eos_type == tabulated) then
-         call eos_temp_get_all_one_grid(w(rho_),w(T_eps_),w(ye_),&
-                                        dummy, prs=w(pp_))
+    if (eos_uses_ye()) then
+         if (eos_has_ymu()) then
+           call eos_temp_get_all_one_grid(w(rho_),w(T_eps_),w(ye_),&
+                                          dummy, prs=w(pp_), ymu=w(ymu_))
+         else
+           call eos_temp_get_all_one_grid(w(rho_),w(T_eps_),w(ye_),&
+                                          dummy, prs=w(pp_))
+         endif
     else
        eps_tmp = w(T_eps_)
        call eos_get_pressure_one_grid(w(pp_),w(rho_),eps_tmp)
@@ -448,7 +466,8 @@ module mod_imhd_intermediate
      w(ixO^S, D_)   = w(ixO^S, D_) * w(ixO^S, psi_metric_)**6
      w(ixO^S, tau_) = w(ixO^S, tau_) * w(ixO^S, psi_metric_)**6
 {^C& w(ixO^S, s^C_) = w(ixO^S, s^C_) * w(ixO^S, psi_metric_)**6    \}
-    if (eos_type == tabulated) w(ixO^S, Dye_) = w(ixO^S, Dye_) * w(ixO^S, psi_metric_)**6
+    if (eos_uses_ye()) w(ixO^S, Dye_) = w(ixO^S, Dye_) * w(ixO^S, psi_metric_)**6
+    if (eos_has_ymu()) w(ixO^S, Dymu_) = w(ixO^S, Dymu_) * w(ixO^S, psi_metric_)**6
 
   end subroutine conformal_transformation
 
@@ -463,7 +482,8 @@ module mod_imhd_intermediate
      w(ixO^S, D_)   = w(ixO^S, D_) / w(ixO^S, psi_metric_)**6
      w(ixO^S, tau_) = w(ixO^S, tau_) / w(ixO^S, psi_metric_)**6
 {^C& w(ixO^S, s^C_) = w(ixO^S, s^C_) / w(ixO^S, psi_metric_)**6    \}
-    if (eos_type == tabulated) w(ixO^S, Dye_) = w(ixO^S, Dye_) / w(ixO^S, psi_metric_)**6
+    if (eos_uses_ye()) w(ixO^S, Dye_) = w(ixO^S, Dye_) / w(ixO^S, psi_metric_)**6
+    if (eos_has_ymu()) w(ixO^S, Dymu_) = w(ixO^S, Dymu_) / w(ixO^S, psi_metric_)**6
 
   end subroutine inverse_conformal_trans
 

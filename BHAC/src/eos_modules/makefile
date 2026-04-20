@@ -29,8 +29,12 @@
 #########################################################################
 FOBJECTS += mod_eos$F mod_eos_polytrope$F mod_eos_tabulated$F mod_eos_tabulated_parameters$F mod_eos_idealgas$F mod_eos_hybrid$F
 FOBJECTS += mod_eos_readtable_scollapse$F mod_eos_readtable_compose$F mod_eos_interpolation$F # mod_eos_inversion_T_to_eps$F
+FOBJECTS += mod_eos_leptonic$F mod_eos_leptonic_parameters$F mod_eos_leptonic_interpolation$F
+FOBJECTS += mod_eos_readtable_leptonic$F mod_eos_readtable_leptonic_scollapse$F
 OBJECTS += mod_eos.o mod_eos_polytrope.o mod_eos_tabulated.o mod_eos_tabulated_parameters.o mod_eos_idealgas.o mod_eos_hybrid.o
 OBJECTS += mod_eos_readtable_scollapse.o mod_eos_readtable_compose.o mod_eos_interpolation.o # mod_eos_inversion_T_to_eps.o
+OBJECTS += mod_eos_leptonic.o mod_eos_leptonic_parameters.o mod_eos_leptonic_interpolation.o
+OBJECTS += mod_eos_readtable_leptonic.o mod_eos_readtable_leptonic_scollapse.o
 
 #########################################################################
 # Dependencies:
@@ -40,6 +44,10 @@ mod_eos_tabulated.o : mod_eos_tabulated_parameters.o mod_eos_interpolation.o mod
 mod_eos_polytrope.o : mod_eos.o
 mod_eos_idealgas.o : mod_eos.o
 mod_eos_hybrid.o: mod_eos.o mod_eos_tabulated.o
+mod_eos_leptonic.o : mod_eos.o mod_rootfinding.o mod_eos_leptonic_parameters.o mod_eos_leptonic_interpolation.o mod_eos_readtable_leptonic.o mod_eos_readtable_leptonic_scollapse.o
+mod_eos_leptonic_interpolation.o : mod_eos_leptonic_parameters.o
 mod_eos_readtable_scollapse.o : mod_eos.o mod_eos_tabulated_parameters.o # mod_eos_inversion_T_to_eps.o
 mod_eos_readtable_compose.o : mod_eos.o mod_eos_tabulated_parameters.o
+mod_eos_readtable_leptonic.o : mod_eos_leptonic_parameters.o
+mod_eos_readtable_leptonic_scollapse.o : mod_eos_leptonic_parameters.o
 mod_eos_inversion_T_to_eps.o : mod_eos_tabulated_parameters.o

@@ -432,8 +432,30 @@ contains
       result = c0 * (1.0 - zd) + c1 * zd
   
     end subroutine TrilinearInterpolation
-    
-  
+
+   subroutine QuadrilinearInterpolation(x, y, z, q, x1, x2, y1, y2, z1, z2, q1, q2, &
+        f1111, f2111, f1211, f2211, f1121, f2121, f1221, f2221, &
+        f1112, f2112, f1212, f2212, f1122, f2122, f1222, f2222, result)
+      double precision, intent(in)  :: x, y, z, q
+      double precision, intent(in)  :: x1, x2, y1, y2, z1, z2, q1, q2
+      double precision, intent(in)  :: f1111, f2111, f1211, f2211
+      double precision, intent(in)  :: f1121, f2121, f1221, f2221
+      double precision, intent(in)  :: f1112, f2112, f1212, f2212
+      double precision, intent(in)  :: f1122, f2122, f1222, f2222
+      double precision, intent(out) :: result
+
+      double precision :: qd
+      double precision :: result_q1, result_q2
+
+      call TrilinearInterpolation(x, y, z, x1, x2, y1, y2, z1, z2, &
+           f1111, f2111, f1211, f2211, f1121, f2121, f1221, f2221, result_q1)
+      call TrilinearInterpolation(x, y, z, x1, x2, y1, y2, z1, z2, &
+           f1112, f2112, f1212, f2212, f1122, f2122, f1222, f2222, result_q2)
+
+      qd = (q - q1) / (q2 - q1)
+      result = result_q1 * (1.0d0 - qd) + result_q2 * qd
+
+   end subroutine QuadrilinearInterpolation
 
 end module mod_interpolate
 !=======================================================================
