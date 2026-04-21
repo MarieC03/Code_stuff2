@@ -106,8 +106,11 @@ contains
       temp_in = temp
       {#IFNDEF UNIT_TESTS
       if (temp>eos_tempmax)     call mpistop("nuc_eos get_press: temp > tempmax")
-      if (temp<eos_tempmin)     call mpistop("nuc_eos get_press: temp < tempmin")
       }
+      if (temp<eos_tempmin) then
+         temp_in = eos_tempmin
+         temp = eos_tempmin
+      endif
       log_temp = dlog10(temp_in)
     else
       {#IFNDEF UNIT_TESTS
@@ -184,7 +187,7 @@ contains
     {#IFNDEF UNIT_TESTS
     if (rho<eos_rhomin)     call mpistop("nuc_eos get_eps: rho < rhomin")
     if (temp>eos_tempmax)   call mpistop("nuc_eos get_eps: temp > tempmax")
-    if (temp<eos_tempmin)   call mpistop("nuc_eos get_eps: temp < tempmin")
+    if (temp<eos_tempmin)   temp = eos_tempmin
     if (ye>eos_yemax)       call mpistop("nuc_eos get_eps: ye > yemax")
     if (ye<eos_yemin)       call mpistop("nuc_eos get_eps: ye < yemin")
     }
@@ -504,10 +507,11 @@ contains
     if (ye>eos_yemax)   call mpistop("nuc_eos temp_get_all: ye  > yemax ")
     if (ye<eos_yemin)   call mpistop("nuc_eos temp_get_all: ye  < yemin ")
     if (temp>eos_tempmax)   call mpistop("nuc_eos temp_get_all: temp > tempmax")
-    if (temp<eos_tempmin)   call mpistop("nuc_eos temp_get_all: temp < tempmin")
+    if (temp<eos_tempmin)   temp = eos_tempmin
     !if (temp<eos_tempmin) log_temp = dlog10(eos_tempmin)
-   }
+    }
 
+    log_temp = dlog10(temp)
     call intep3d_many(log_rho, log_temp, ye, &
                       ffx, eos_tables,  &
                       nrho, ntemp, nye, nvars,     &

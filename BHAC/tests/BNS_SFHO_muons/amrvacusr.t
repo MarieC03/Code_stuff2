@@ -151,11 +151,10 @@ module Init_c2b_cart_3d_interface
                 call init_single_variable(my_c2b_3d_profile%ymu, fpath, fnbase_list(FIL_ymu), dsname_list(FIL_ymu), &
                     num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
             endif
+            call init_single_variable(my_c2b_3d_profile%temp, fpath, fnbase_list(FIL_temp), dsname_list(FIL_temp), &
+                num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
             if (use_eps_init) then
                 call init_single_variable(my_c2b_3d_profile%eps, fpath, fnbase_list(FIL_eps), dsname_list(FIL_eps), &
-                    num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
-            else
-                call init_single_variable(my_c2b_3d_profile%temp, fpath, fnbase_list(FIL_temp), dsname_list(FIL_temp), &
                     num_refine_levels, num_datablocks, iter_num, 'FFF', save_cpu_or_mem)
             endif
         else
@@ -392,7 +391,8 @@ module NSimport
  
     ! character(len=256) :: fpath_c2b_3dcart = "/gpfs/scratch/ehpc590/Marie/FIL_runs/NS_HOT_M1_plasma_NEW/output-0001/data_hdf5_3D"
 
-character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_m1_SFHo_midres/3D_data_output-0014/data_hdf5_3D"
+character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npemu_m1_SFHo_midres/output-0000/data_hdf5_3D" 
+ !"/mnt/raarchive/hng/FIL_data/new_03npe_m1_SFHo_midres/3D_data_output-0014/data_hdf5_3D"
 !"/mnt/raarchive/hng/FIL_data/new_03npe_m1_DD2_midres/output-0001/data_hdf5_3D"
 
       integer                           :: iteration_num = 358912 !531456 ! 140032 !512 !1024 !200448 ! the iteration number you want to read, before reading, please use h5ls to check what iteration you want exists in that file
@@ -747,11 +747,16 @@ character(len=256) :: fpath_c2b_3dcart = "/mnt/raarchive/hng/FIL_data/new_03npe_
                     w(ix^D, ymu_) = 0.0d0
                 endif
                 if (use_eps_init) then
-                    call interp_cart3d_carpet_variable_one_point(eps_tmp(ix^D), x1, x2, x3, my_c2b_3d_profile%eps, interp_fluid, eos_epsmin+10*tiny(1.0d0))
+                    call interp_cart3d_carpet_variable_one_point(w(ix^D, T_eps_), x1, x2, x3, &
+                        my_c2b_3d_profile%temp, interp_fluid, eos_tempmin+10*tiny(1.0d0))
+                    call interp_cart3d_carpet_variable_one_point(eps_tmp(ix^D), x1, x2, x3, &
+                        my_c2b_3d_profile%eps, interp_fluid, eos_epsmin+10*tiny(1.0d0))
                     if (eos_has_ymu()) then
-                        call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), w(ix^D, ye_), ymu=w(ix^D, ymu_))
+                        call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), &
+                            w(ix^D, ye_), ymu=w(ix^D, ymu_))
                     else
-                        call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), w(ix^D, ye_))
+                        call eos_get_temp_one_grid(w(ix^D, rho_), eps_tmp(ix^D), w(ix^D, T_eps_), &
+                            w(ix^D, ye_))
                     endif
                 else
                     call interp_cart3d_carpet_variable_one_point(w(ix^D, T_eps_), x1, x2, x3, my_c2b_3d_profile%temp, interp_fluid, eos_tempmin+10*tiny(1.0d0))
@@ -2258,11 +2263,11 @@ subroutine specialvar_output(ixI^L,ixO^L,nwmax,w,s,normconv,dxgrid,level,sold,sm
       w(ixI^S,nw+48) = w(ixI^S, erad5_) / metricM1%sqrtg(ixI^S)  ! erad5_prim
 
     {do ix^D=ixOmin^D, ixOmax^D \}
-      eos_rho(ix^D) = w(ix^D, rho_)
-      eos_temp(ix^D) = w(ix^D, T_eps_)
-      eos_ye(ix^D)  = w(ix^D, ye_)
+      eos_rho(ix^D) = eos_bound_rho(w(ix^D, rho_))
+      eos_temp(ix^D) = eos_bound_temp(w(ix^D, T_eps_))
+      eos_ye(ix^D)  = eos_bound_ye(w(ix^D, ye_))
       if (eos_has_ymu()) then
-           eos_ymu(ix^D) = w(ix^D, ymu_)
+           eos_ymu(ix^D) = eos_bound_ymu(w(ix^D, ymu_))
            call eos_temp_get_all_one_grid(eos_rho(ix^D), eos_temp(ix^D), &
                 eos_ye(ix^D), eos_eps(ix^D),&
                  prs = eos_prs(ix^D), &
@@ -2521,13 +2526,13 @@ subroutine printlog_special
         adm_mass_local = adm_mass_local+sum(adm_vol(ixM^T)*dvolume(ixM^T, iigrid))
         if (eos_uses_ye()) then
             {do ix^D = ixMlo^D, ixMhi^D \}
-                temp_local = pw(igrid)%w(ix^D, T_eps_)
-                rho_local = pw(igrid)%w(ix^D, rho_)
+                temp_local = eos_bound_temp(pw(igrid)%w(ix^D, T_eps_))
+                rho_local = eos_bound_rho(pw(igrid)%w(ix^D, rho_))
                 if (eos_has_ymu()) then
-                    call eos_temp_get_all_one_grid(rho_local, temp_local, pw(igrid)%w(ix^D, ye_), E_internal(ix^D, iigrid), &
-                                                   ymu=pw(igrid)%w(ix^D, ymu_))
+                    call eos_temp_get_all_one_grid(rho_local, temp_local, eos_bound_ye(pw(igrid)%w(ix^D, ye_)), E_internal(ix^D, iigrid), &
+                                                   ymu=eos_bound_ymu(pw(igrid)%w(ix^D, ymu_)))
                 else
-                    call eos_temp_get_all_one_grid(rho_local, temp_local, pw(igrid)%w(ix^D, ye_), E_internal(ix^D, iigrid))
+                    call eos_temp_get_all_one_grid(rho_local, temp_local, eos_bound_ye(pw(igrid)%w(ix^D, ye_)), E_internal(ix^D, iigrid))
                 endif
             {enddo ^D&\}
         else

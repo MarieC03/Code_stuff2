@@ -359,13 +359,13 @@ contains
 
     {do ix^D = ixO^LIM^D \}
         if (eos_uses_ye()) then
-          temp_local = w(ix^D,T_eps_)
-          rho_local  = w(ix^D,rho_)
+          temp_local = eos_bound_temp(w(ix^D,T_eps_))
+          rho_local  = eos_bound_rho(w(ix^D,rho_))
           if (eos_has_ymu()) then
-            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
-                                           eps_tmp(ix^D),ymu=w(ix^D,ymu_))
+            call eos_temp_get_all_one_grid(rho_local,temp_local,eos_bound_ye(w(ix^D,ye_)),&
+                                           eps_tmp(ix^D),ymu=eos_bound_ymu(w(ix^D,ymu_)))
           else
-            call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+            call eos_temp_get_all_one_grid(rho_local,temp_local,eos_bound_ye(w(ix^D,ye_)),&
                                            eps_tmp(ix^D))
           endif
         else

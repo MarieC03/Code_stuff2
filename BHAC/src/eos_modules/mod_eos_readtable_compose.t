@@ -35,7 +35,7 @@ contains
      integer :: i,j,k,iv
      integer :: status_e, status_comp, nullptr
  
-     double precision :: amu_cgs_andi, eps_min_local, eos_prsmin, dummy
+     double precision :: amu_cgs_andi, eps_min_local, eos_prsmin, dummy, compose_baryon_mass
      double precision :: buffer1,buffer2,buffer3,buffer4
      double precision, allocatable      :: enthalpy(:,:,:)
      double precision, allocatable      :: thermo_table(:,:,:,:)
@@ -337,10 +337,18 @@ contains
      !------------------------------------------------------------------------------!
      !------------------------------------------------------------------------------!
 
-     ! assume baryon_mass is neutron mass (not optimal, but we only have this in compose) : massn_cgs
-     ! convert n_b to rho_b
-     if (mype==0) write(*, *) "The baryon mass is set to be massn_cgs = ", massn_cgs, "g, when reading compose EoS table."
-     logrho_table(1:nrho)   = log10(logrho_table(1:nrho) * massn_cgs * cm3_to_fm3 * rho_gf)
+     ! FIL uses a fixed neutron-mass conversion for COMPOSE nb -> rho.
+     ! Keep the same convention here so compose baryon tables remain
+     ! consistent with leptonic EOS tables and Weakhub products.
+     compose_baryon_mass = 1.674927211d-24
+     if (mype==0) then
+        write(*, *) "The baryon mass is fixed to the FIL-compatible neutron mass = ", &
+             compose_baryon_mass, " g, when reading compose EoS table."
+        if (abs(massn_cgs - compose_baryon_mass) > 1.0d-12*compose_baryon_mass) then
+           write(*, *) "Input massn_cgs = ", massn_cgs, " g is ignored for compose tables."
+        endif
+     endif
+     logrho_table(1:nrho)   = log10(logrho_table(1:nrho) * compose_baryon_mass * cm3_to_fm3 * rho_gf)
 
      logtemp_table(1:ntemp) =  log10(logtemp_table(1:ntemp)) 
 
@@ -383,7 +391,7 @@ contains
        ! Derivatives
        ! these two are wrong, later will handle them
        eos_tables(1:nrho,1:ntemp,1:nye,i_dpdrhoe) = eos_tables(1:nrho,1:ntemp,1:nye,i_dpdrhoe)/&
-                                                    (massn_cgs * cm3_to_fm3 * rho_gf) * (press_gf)
+                                                    (compose_baryon_mass * cm3_to_fm3 * rho_gf) * (press_gf)
        eos_tables(1:nrho,1:ntemp,1:nye,i_dpderho) = eos_tables(1:nrho,1:ntemp,1:nye,i_dpderho)/(eps_gf) * press_gf
      endif
 

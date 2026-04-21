@@ -53,6 +53,23 @@
 
 namespace grace {
 
+inline std::string resolve_m1_eas_kind_host()
+{
+    std::string kind = "test";
+    try {
+        kind = grace::get_param<std::string>("m1", "eas", "kind");
+    } catch(...) {}
+
+    bool use_analytic = false;
+    bool use_weakhub = false;
+    try { use_analytic = grace::get_param<bool>("m1", "eas", "use_analytic"); } catch(...) {}
+    try { use_weakhub = grace::get_param<bool>("m1", "eas", "use_weakhub"); } catch(...) {}
+
+    if (use_analytic) return "neutrino_analytic";
+    if (use_weakhub) return "neutrino_weakhub";
+    return kind;
+}
+
 template <typename ViewT>
 KOKKOS_INLINE_FUNCTION inline void set_m1_species_rates(
     ViewT const& view,
@@ -313,7 +330,7 @@ struct neutrinos_eas_op {
   }
 
   void validate_configuration_host() const {
-    const auto eas_kind = grace::get_param<std::string>("m1", "eas", "kind");
+    const auto eas_kind = resolve_m1_eas_kind_host();
     if (eas_kind != "neutrino_analytic" && eas_kind != "neutrino_weakhub") {
       return;
     }
@@ -345,10 +362,7 @@ struct neutrinos_eas_op {
              "The 5-species M1 build requires eos.leptonic_4d.use_muonic_eos = true "
              "so muonic matter couples consistently to nu_mu and anti-nu_mu.");
 #else
-      ASSERT(!use_muonic_eos,
-             "Muonic EOS contributions require the 5-species M1 build. "
-             "Disable eos.leptonic_4d.use_muonic_eos or rebuild GRACE with five "
-             "neutrino species.");
+      (void)use_muonic_eos;
 #endif
     }
 
@@ -497,7 +511,9 @@ struct neutrinos_eas_op {
     double Ye        = aux(VEC(i,j,k),YE_,q);
     double Ymu       = 0.0;
 #ifdef GRACE_ENABLE_LEPTONIC_4D
-    Ymu = aux(VEC(i,j,k),YMU_,q);
+    if constexpr (m1_explicit_muon_transport_enabled()) {
+      Ymu = aux(VEC(i,j,k),YMU_,q);
+    }
 #endif
     if (betaeq_mode == BETAEQ_CHEMICAL) solve_betaeq_state(rho, T, Ye, Ymu);
 

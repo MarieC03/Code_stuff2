@@ -11,7 +11,7 @@ module mod_m1_diagnostics
       use mod_m1_internal
       use mod_m1_constants
       use mod_eos, only: small_rho, small_temp, big_ye, eos_yemin, eos_yemax, eos_ymumin, &
-           eos_temp_get_all_one_grid
+           eos_temp_get_all_one_grid, eos_bound_rho, eos_bound_temp, eos_bound_ye, eos_bound_ymu
       use mod_m1_eas_param
       use mod_m1_closure
       
@@ -73,11 +73,11 @@ module mod_m1_diagnostics
         nprimitive(^KSP) = N_KSP(^KSP)/Gamma_closure(^KSP)
 
 
-        rho = wprim(ix^D,rho_) 
-        T_fluid = wprim(ix^D,T_eps_) 
-        y_e = wprim(ix^D,Ye_) 
+        rho = eos_bound_rho(max(wprim(ix^D,rho_), small_rho))
+        T_fluid = eos_bound_temp(max(wprim(ix^D,T_eps_), small_temp))
+        y_e = eos_bound_ye(wprim(ix^D,Ye_))
         y_mu = eos_ymumin
-        if (m1_use_muons) y_mu = wprim(ix^D,Ymu_)
+        if (m1_use_muons) y_mu = eos_bound_ymu(wprim(ix^D,Ymu_))
    
         y_p = y_e + y_mu
         rho_cgs = rho/RHOGF

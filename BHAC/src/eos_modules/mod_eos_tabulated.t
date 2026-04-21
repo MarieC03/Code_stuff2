@@ -80,7 +80,7 @@ contains
 
     if (rho<=small_rho_thr) then
        call atmo_get_pressure_one_grid(prs,rho,eps)
-       if (present(temp)) temp = small_temp
+       if (present(temp)) temp = max(small_temp, eos_tempmin)
        return
     end if
 
@@ -94,9 +94,12 @@ contains
 
 
     if (present(temp)) then
-      temp_in = temp
       if (temp>eos_tempmax)     call mpistop("nuc_eos get_press: temp > tempmax")
-      if (temp<eos_tempmin)     call mpistop("nuc_eos get_press: temp < tempmin")
+      temp_in = temp
+      if (temp<eos_tempmin) then
+         temp_in = eos_tempmin
+         temp = eos_tempmin
+      endif
       log_temp = dlog10(temp_in)
     else
       if (eps>eos_epsmax)     call mpistop("nuc_eos get_press: eps > epsmax")
@@ -145,7 +148,7 @@ contains
     double precision, intent(in), optional :: temp, ye, ymu
     double precision, intent(inout) :: eps
 
-    double precision             :: log_rho, log_temp
+    double precision             :: log_rho, log_temp, temp_in
 
     if (.not.present(temp)) call mpistop("nuc_eos get_eps: need input temp!")
     if (.not.present(ye))   call mpistop("nuc_eos get_eps: need input ye!")
@@ -155,18 +158,19 @@ contains
        return
     end if
 
-    log_rho  = dlog10(rho)
-    log_temp = dlog10(temp)
-
     if (rho>eos_rhomax) then
        write(*,*) rho, 'rho in get_eps'
        call mpistop("nuc_eos get_eps: rho > rhomax")
     endif
     if (rho<eos_rhomin)     call mpistop("nuc_eos get_eps: rho < rhomin")
     if (temp>eos_tempmax)   call mpistop("nuc_eos get_eps: temp > tempmax")
-    if (temp<eos_tempmin)   call mpistop("nuc_eos get_eps: temp < tempmin")
     if (ye>eos_yemax)       call mpistop("nuc_eos get_eps: ye > yemax")
     if (ye<eos_yemin)       call mpistop("nuc_eos get_eps: ye < yemin")
+
+    temp_in = temp
+    if (temp<eos_tempmin) temp_in = eos_tempmin
+    log_rho  = dlog10(rho)
+    log_temp = dlog10(temp_in)
 
     call intep3d(log_rho, log_temp, ye, &
            eps, eos_tables(:,:,:,i_logenergy), &
@@ -193,12 +197,17 @@ contains
 
     if (rho<=small_rho_thr) then
        call atmo_get_cs2_one_grid(cs2,rho,eps)
-       if (present(temp)) temp = small_temp
+       if (present(temp)) temp = max(small_temp, eos_tempmin)
        return
     end if
 
     if (present(temp)) then
       temp_in = temp
+      if (temp>eos_tempmax) call mpistop("nuc_eos get_cs2: temp > tempmax")
+      if (temp<eos_tempmin) then
+         temp_in = eos_tempmin
+         temp = eos_tempmin
+      endif
       log_temp = dlog10(temp_in)
     else
       if (eps>eos_epsmax)     call mpistop("nuc_eos get_cs2: eps > epsmax")
@@ -292,11 +301,7 @@ contains
 
     ! check the results
     if (temp>eos_tempmax) call mpistop("nuc_eos get_temp: temp > tempmax") 
-    if (temp .lt. eos_tempmin) then
-        write(*,*) 'rho, eps, temp, ye'
-        write(*,*) rho, eps, temp, ye
-        call mpistop("nuc_eos get_temp: temp .le. tempmin")
-     endif
+    if (temp .lt. eos_tempmin) temp = eos_tempmin
 
   end subroutine tabulated_get_temp_one_grid
 
@@ -323,7 +328,7 @@ contains
        if (present(prs))    call atmo_get_pressure_one_grid(prs,rho,eps)
        if (present(cs2))    call atmo_get_cs2_one_grid(cs2,rho,eps)
        if (present(ent))    ent  = 4.0d0
-       if (present(temp))   temp = small_temp
+       if (present(temp))   temp = max(small_temp, eos_tempmin)
        return
     end if
 
@@ -373,15 +378,14 @@ contains
     endif
 
     ! check temp first b4 find the others
-    if (present(temp))   temp = 10.d0**log_temp
+    if (present(temp)) then
+       temp = 10.d0**log_temp
        if (temp>eos_tempmax) call mpistop("nuc_eos eps_get_all: temp > tempmax") 
        if (temp .lt. eos_tempmin) then
-         write(*,*) 'rho, eps, temp, ye,  nuc eos eps get all: temp .lt. tempmin'
-         write(*,*) rho, eps, temp, ye
-         !temp = max(small_temp,eos_tempmin)
-         !log_temp = max(log10(small_temp),log10(eos_tempmin))
-         call mpistop("nuc_eos eps_get_all: temp .lt. tempmin") 
+         temp = eos_tempmin
+         log_temp = dlog10(eos_tempmin)
        endif
+    endif
 
     call intep3d_many(log_rho, log_temp, ye, &
                       ffx, eos_tables,  &
@@ -451,7 +455,7 @@ contains
     if (rho<=small_rho_thr) then
        rho = small_rho
        eps = small_eps
-       temp= small_temp
+       temp = max(small_temp, eos_tempmin)
        ! fixme: should include rest of the variables as well
        if (present(prs))    call atmo_get_pressure_one_grid(prs,rho,eps)
        if (present(cs2))    call atmo_get_cs2_one_grid(cs2,rho,eps)
@@ -459,15 +463,14 @@ contains
        return
     end if
 
-    log_temp = dlog10(temp)   
-    log_rho  = dlog10(rho)
-
     if (rho>eos_rhomax) call mpistop("nuc_eos temp_get_all: rho > rhomax")
     if (ye>eos_yemax)   call mpistop("nuc_eos temp_get_all: ye  > yemax ")
     if (ye<eos_yemin)   call mpistop("nuc_eos temp_get_all: ye  < yemin ")
     if (temp>eos_tempmax)   call mpistop("nuc_eos temp_get_all: temp > tempmax")
-    if (temp<eos_tempmin)   call mpistop("nuc_eos temp_get_all: temp < tempmin")
-    !if (temp<eos_tempmin) log_temp = dlog10(eos_tempmin)
+    if (temp<eos_tempmin) temp = eos_tempmin
+
+    log_temp = dlog10(temp)
+    log_rho  = dlog10(rho)
 
 
     call intep3d_many(log_rho, log_temp, ye, &
@@ -863,11 +866,11 @@ contains
     double precision, intent(inout), optional :: eps, prs
     double precision, intent(inout), optional :: ymu
 
-    if (present(ymu)) ymu = eos_ymumin
-
     double precision, save                    :: log_rho, log_temp
     double precision                          :: log_eps, ye_min, ye_max, log_prs
     integer                                   :: error_code = -1
+
+    if (present(ymu)) ymu = eos_ymumin
 
     log_rho  = dlog10(rho)
     log_temp = dlog10(temp)
@@ -941,8 +944,8 @@ contains
                       nrho, ntemp, nye, nvars,     &
                       logrho_table, logtemp_table, ye_table)
          !f(Ye) =  mu_e(Ye) + mu_p(Ye) - mu_n(Ye)  ! included the mass difference Qnp (we should)
-          !write(*,*) ffx(i_mu_e), ffx(i_mu_p), ffx(i_mu_n) , ye_in
-         ! seems adding the later term do no match with the FIL result. FIL also wrong, so we do not add Qnp
+         !write(*,*) ffx(i_mu_e), ffx(i_mu_p), ffx(i_mu_n) , ye_in
+         ! Keep the neutron-proton rest-mass difference consistent with the active EOS convention.
          func_munu_of_ye = ffx(i_mu_e) + ffx(i_mu_p) - ffx(i_mu_n) - Qnp   !KEN
        end function
   end subroutine tabulated_get_all_beta_eqm_one_grid

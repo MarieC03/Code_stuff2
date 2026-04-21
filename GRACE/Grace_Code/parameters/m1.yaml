@@ -97,6 +97,8 @@ m1:
       description: >
         Rate prescription. Use neutrino_analytic for the FIL-style 3-spec
         analytic rates, and neutrino_weakhub for the tabulated Weakhub rates.
+        The legacy booleans m1.eas.use_analytic and m1.eas.use_weakhub still
+        override this value for backwards compatibility.
 
     species_mode:
       type: keyword
@@ -113,15 +115,14 @@ m1:
       default: false
       description: >
         Legacy compatibility switch for selecting the analytic neutrino rates.
-        Usually leave this false and select the rates treatment via
-        m1.eas.kind.
+        If set true it overrides m1.eas.kind and selects neutrino_analytic.
 
     use_weakhub:
       type: bool
       default: false
       description: >
         Legacy compatibility switch for selecting the Weakhub neutrino rates.
-        Keep this consistent with m1.eas.kind.
+        If set true it overrides m1.eas.kind and selects neutrino_weakhub.
 
     weakhub_table:
       type: string
@@ -177,8 +178,9 @@ m1:
       allowed: ["off", "chemical"]
       default: "off"
       description: >
-        Optional beta-equilibrium override for the composition passed to the
-        rates.
+        Optional matter-only chemical-equilibrium override for the composition
+        passed to the rates. This is not the full trapped-neutrino FIL betaeq
+        root solve.
 
     temperature_correction:
       type: bool

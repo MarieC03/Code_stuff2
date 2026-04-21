@@ -185,7 +185,7 @@
        !small_rho_thr    = 1.0101010101010101d-14   ! 1.0d-14 / 0.99d0
        small_rho_fac    = 0.99d0 !0.99d0
        small_temp       = 0.1d0 !0.01d0
-       massn_cgs        = 1.6584904382336898d-24 ! unit: gram 
+       massn_cgs        = 1.674927211d-24 ! unit: gram; FIL-compatible neutron-mass convention for COMPOSE
 &end
 
 &outflowlist

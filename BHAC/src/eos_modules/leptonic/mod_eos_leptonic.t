@@ -3,6 +3,7 @@ module mod_eos_leptonic
   use mod_eos_leptonic_parameters
   use mod_eos_leptonic_interpolation
   use mod_rootfinding
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   implicit none
   public
 
@@ -10,12 +11,15 @@ contains
 
   subroutine eos_leptonic_activate()
     use mod_eos_readtable_leptonic_scollapse
+    use mod_eos_readtable_leptonic_compose
     use mod_eos_readtable_leptonic
     include 'amrvacdef.f'
 
     select case (trim(baryon_table_type))
     case ('scollapse')
       call activate_baryon_tablereader_scollapse()
+    case ('compose')
+      call activate_baryon_tablereader_compose()
     case default
       call mpistop('eos_leptonic_activate: unsupported baryon table type')
     end select
@@ -218,31 +222,96 @@ contains
 
     double precision :: rho_local, temp_local, lrho, ltemp
     double precision :: ymu_local, eps_min, eps_max
-    integer :: error_code
+    double precision :: eps_scale, eps_tol, res_tol
+    double precision :: f_guess, f_prev, f_curr
+    double precision :: best_abs_res, best_ltemp
+    integer :: error_code, i
+    logical :: have_prev
 
     ymu_local = lep_eos_ymumin
     if (present(ymu)) ymu_local = ymu
 
     call leptonic_get_eps_range(rho, eps_min, eps_max, ye, ymu_local)
-    if (eps <= eps_min) then
+    eps_scale = max(1.0d0, max(abs(eps_min), abs(eps_max)))
+    eps_tol = max(100.0d0 * epsilon(1.0d0) * eps_scale, lep_eos_precision * eps_scale)
+    if (eps <= eps_min + eps_tol) then
       eps = eps_min
       temp = lep_eos_tempmin
       return
     end if
-    if (eps >= eps_max) then
+    if (eps >= eps_max - eps_tol) then
       eps = eps_max
       temp = lep_eos_tempmax
       return
     end if
 
-    call lep_bound_rho_temp(rho, max(temp, lep_eos_tempmin), rho_local, temp_local, lrho, ltemp)
-    ltemp = 0.5d0 * (lep_logtemp_table(1) + lep_logtemp_table(lep_ntemp))
+    temp_local = temp
+    if (.not. ieee_is_finite(temp_local)) temp_local = lep_eos_tempmin
+
+    ! Keep the imported/current temperature as the first inversion guess.
+    call lep_bound_rho_temp(rho, max(temp_local, lep_eos_tempmin), rho_local, temp_local, lrho, ltemp)
+    res_tol = max(eps_tol, lep_eos_precision * max(1.0d0, abs(eps)))
+    f_guess = func_eps_of_temp(ltemp)
+    if (ieee_is_finite(f_guess)) then
+      if (abs(f_guess) <= res_tol) then
+        temp = exp(ltemp)
+        call leptonic_temp_get_all_one_grid(rho_local, temp, ye, eps, ymu=ymu_local)
+        return
+      end if
+    else
+      ltemp = 0.5d0 * (lep_logtemp_table(1) + lep_logtemp_table(lep_ntemp))
+    end if
+
     error_code = -1
     call rootfinding_brent(ltemp, lep_logtemp_table(1), lep_logtemp_table(lep_ntemp), &
          lep_eos_precision, lep_eos_iter_max, error_code, func_eps_of_temp)
 
     if (error_code == 2) call mpistop('leptonic_get_temp_one_grid: NaN in rootfinding')
+    if (error_code /= 0) then
+      best_abs_res = huge(1.0d0)
+      best_ltemp = ltemp
+      have_prev = .false.
+
+      do i = 1, lep_ntemp
+        f_curr = func_eps_of_temp(lep_logtemp_table(i))
+        if (.not. ieee_is_finite(f_curr)) cycle
+
+        if (abs(f_curr) < best_abs_res) then
+          best_abs_res = abs(f_curr)
+          best_ltemp = lep_logtemp_table(i)
+        end if
+
+        if (abs(f_curr) <= res_tol) then
+          ltemp = lep_logtemp_table(i)
+          error_code = 0
+          exit
+        end if
+
+        if (have_prev) then
+          if (f_prev == 0.0d0 .or. f_prev * f_curr < 0.0d0) then
+            ltemp = 0.5d0 * (lep_logtemp_table(i-1) + lep_logtemp_table(i))
+            error_code = -1
+            call rootfinding_brent(ltemp, lep_logtemp_table(i-1), lep_logtemp_table(i), &
+                 lep_eos_precision, lep_eos_iter_max, error_code, func_eps_of_temp)
+            if (error_code == 2) call mpistop('leptonic_get_temp_one_grid: NaN in rootfinding')
+            if (error_code == 0) exit
+          end if
+        end if
+
+        f_prev = f_curr
+        have_prev = .true.
+      end do
+
+      if (error_code /= 0) then
+        if (best_abs_res >= huge(1.0d0) * 0.5d0) then
+          call mpistop('leptonic_get_temp_one_grid: failed to bracket eps(T)')
+        end if
+        ltemp = best_ltemp
+      end if
+    end if
+
     temp = exp(ltemp)
+    call leptonic_temp_get_all_one_grid(rho_local, temp, ye, eps, ymu=ymu_local)
 
   contains
     double precision function func_eps_of_temp(ltemp_in)

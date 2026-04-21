@@ -348,7 +348,8 @@ contains
                !end if
 
                ! case II: maybe I can just bound with eos_epsmin/max?
-               eps_hat = max( min( eos_epsmax, eps_hat), eos_epsmin)
+               call eos_get_eps_range(rho_hat, eps_min, eps_max, ye=ye_hat, ymu=ymu_hat)
+               eps_hat = max( min( eps_max, eps_hat), eps_min)
             end if !endif of lfac_max
 
          end if !endif of small_rho_thr
@@ -366,7 +367,11 @@ contains
             else
               w(ix^D, ymu_) = eos_ymumin
             endif
-            call eos_get_temp_one_grid(w(ix^D, rho_), eps_hat, w(ix^D, T_eps_), w(ix^D, ye_), ymu=ymu_hat)
+            call eos_get_eps_range(w(ix^D, rho_), eps_min, eps_max, &
+                                   ye=w(ix^D, ye_), ymu=w(ix^D, ymu_))
+            eps_hat = max( min( eps_max, eps_hat ), eps_min )
+            call eos_get_temp_one_grid(w(ix^D, rho_), eps_hat, w(ix^D, T_eps_), &
+                                       w(ix^D, ye_), ymu=ymu_hat)
           else
             w(ix^D, T_eps_) = eps_hat
           endif
@@ -377,7 +382,11 @@ contains
 
           {#IFNDEF DY_SP
           if (eos_uses_ye()) then
+            w(ix^D,rho_) = eos_bound_rho(w(ix^D,rho_))
+            w(ix^D,T_eps_) = eos_bound_temp(w(ix^D,T_eps_))
+            w(ix^D,ye_) = eos_bound_ye(w(ix^D,ye_))
             if (eos_has_ymu()) then
+              w(ix^D,ymu_) = eos_bound_ymu(w(ix^D,ymu_))
               call eos_temp_get_all_one_grid(w(ix^D,rho_), w(ix^D,T_eps_), w(ix^D,ye_), dummy, &
                                              prs = prs_tmp, ymu=w(ix^D,ymu_))
             else

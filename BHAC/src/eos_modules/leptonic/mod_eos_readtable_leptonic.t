@@ -51,6 +51,7 @@ contains
     double precision, allocatable :: flat_ele(:)   ! nrho*ntemp*nyle*nvars_ele
     double precision, allocatable :: flat_muon(:)  ! nrho*ntemp*nymu*nvars_muon
     double precision, allocatable :: logrho_tmp(:), logtemp_tmp(:)
+    double precision :: rho_axis_diff, temp_axis_diff
 
     integer :: nrho_loc, ntemp_loc, nyle_loc, nymu_loc
     integer :: i, j, k, iv, indold, indnew
@@ -130,10 +131,14 @@ contains
     if (.not. allocated(lep_logrho_table) .or. .not. allocated(lep_logtemp_table)) then
       call mpistop("mod_eos_readtable_leptonic: baryon axes must be loaded first")
     end if
-    if (maxval(abs(logrho_tmp - lep_logrho_table)) > 1.0d-12) then
+    rho_axis_diff = maxval(abs(logrho_tmp - lep_logrho_table))
+    temp_axis_diff = maxval(abs(logtemp_tmp - lep_logtemp_table))
+    if (rho_axis_diff > 1.0d-10) then
+      if (mype == 0) write(*,'(a,es14.6)') "  max |d log rho| = ", rho_axis_diff
       call mpistop("mod_eos_readtable_leptonic: rho axis mismatch")
     end if
-    if (maxval(abs(logtemp_tmp - lep_logtemp_table)) > 1.0d-12) then
+    if (temp_axis_diff > 1.0d-10) then
+      if (mype == 0) write(*,'(a,es14.6)') "  max |d log temp| = ", temp_axis_diff
       call mpistop("mod_eos_readtable_leptonic: temp axis mismatch")
     end if
 

@@ -26,6 +26,7 @@
  */
 
 #include "grace_weakhub_table.hh"
+#include <grace/physics/eas_policies.hh>
 
 #include <stdexcept>
 #include <string>
@@ -60,11 +61,7 @@ namespace {
             "The 5-species Weakhub path requires eos.leptonic_4d.use_muonic_eos = true.");
       }
 #else
-      if (use_muonic_eos) {
-        throw std::runtime_error(
-            "Muonic EOS contributions require the 5-species M1 build. "
-            "Disable eos.leptonic_4d.use_muonic_eos or use a 5-species build.");
-      }
+      (void)use_muonic_eos;
 #endif
     }
 
@@ -109,7 +106,7 @@ bool weakhub_enabled_from_params() {
   bool use_weakhub = false;
   try { use_weakhub = grace::get_param<bool>("m1","eas","use_weakhub"); } catch(...) {}
   try {
-    const auto kind = grace::get_param<std::string>("m1","eas","kind");
+    const auto kind = grace::resolve_m1_eas_kind_host();
     if (kind == "neutrino_weakhub") use_weakhub = true;
     if (kind == "neutrino_analytic") use_weakhub = false;
   } catch(...) {}

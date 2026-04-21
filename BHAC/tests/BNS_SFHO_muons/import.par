@@ -169,15 +169,16 @@
        ! Eos_type_input could be 1. tabulated, 2. idealgas, 3. polytrope 
        !eos_type_input   = 'idealgas'      
        eos_type_input   = 'leptonic'      
-       baryon_table_type = 'scollapse'        
+       baryon_table_type = 'compose'
       ! eos_table_name = '/mnt/raarchive/hng/EOS/tntyst_nnew.h5'
       ! eos_table_name = '/zhome/academic/HLRS/xfp/xfpcassi/EOS/EOS_TABLES/tntyst_nnew.h5'
       ! eos_table_name = '/mnt/rafast/mcassing/EoS/tntyst_nnew.h5'
       ! eos_table_name = '/mnt/rafast/mcassing/EoS/HSDD2_new.h5'
       ! eos_table_name = '/mnt/rafast/mcassing/EoS/dd2_compose_electrons_ye0-5.h5'
-       ! Use the matching FIL/BHAC scollapse baryon table plus the 4D leptonic table.
-       baryon_table_name = '/mnt/rafast/mcassing/EoS/scollapse/SFHo_baryon.h5'
-       leptonic_table_name = '/mnt/rafast/mcassing/EoS/scollapse/SFHo_leptonic.h5'
+       ! Use the matching FIL/BHAC compose baryon table plus the 4D leptonic table.
+       baryon_table_name = '/mnt/raarchive/hng/EOS/sfho_compose_electrons_ye0-5.h5'
+       leptonic_table_name = '/mnt/raarchive/hng/EOS/sfhoele_0-5ye_newformat_1000mev_mu_max_fullfermi_allfixed_Bollig_typeIII_hotfixMuon_electron_tables.h5'
+       !'/mnt/rafast/mcassing/EoS/scollapse/SFHo_leptonic.h5'
        lep_use_muons = .true.
        lep_add_ele_contribution = .true.
        !atmo_type        = 'polytrope'      
@@ -189,7 +190,7 @@
        !small_rho_thr    = 1.0101010101010101d-14   ! 1.0d-14 / 0.99d0
        small_rho_fac    = 0.99d0 !0.99d0
        small_temp       = 0.1d0 !0.01d0
-       massn_cgs        = 1.6584904382336898d-24 ! unit: gram 
+       massn_cgs        = 1.674927211d-24 ! unit: gram; FIL-compatible neutron-mass convention for COMPOSE
 &end
 
 &outflowlist
@@ -250,7 +251,8 @@
    Weakhub_grey_method = 1
 
     ! This must point to the matching 6-spec Weakhub table produced on the FIL side.
-    fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/SFHo_muonic_6spec_Weakhub_grey.h5"
+    fileWeakhub = "/mnt/raarchive/hng/BHAC-FIL_handover/Neutrino_tables/SFHocompose_grey_npemu_Bollig_suppress_noPP_advopac_20240818_Weakhub_grey.h5"
+!"/mnt/rafast/mcassing/EoS/weakhub/SFHo_muonic_6spec_Weakhub_grey.h5"
    !fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/conven_TNTYST_new_PPkernels_ESkappa_20250404_Weakhub_grey.h5"
   ! fileWeakhub = "/mnt/rafast/mcassing/Weakhub/dURCA_convenforbetaproc_DD2_grey_npe_20240723_Weakhub_grey.h5"
   ! fileWeakhub = "/mnt/rafast/mcassing/EoS/weakhub/DD2compose_grey_npe_noPP_advopac_20240906_Weakhub_grey.h5"

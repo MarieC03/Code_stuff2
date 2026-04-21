@@ -286,6 +286,7 @@ use mod_interpolate
 use mod_imhd_intermediate
 {#IFDEF M1
 use mod_m1, only: m1_correct_asymptotic_fluxes
+use mod_m1_closure, only: m1_enforce_realizability
 !use mod_m1_metric_interface
 }
 use mod_limiter
@@ -968,7 +969,7 @@ contains
      double precision, dimension(ixI^S) :: flow_dA, fhigh_dA
    
      {#IFDEF M1
-     double precision, dimension(ixI^S) :: epsR, theta_n, theta_e, theta_rad
+     double precision, dimension(ixI^S) :: epsN, epsE, theta_n, theta_e, theta_rad
      }
    
      integer :: iw
@@ -1021,10 +1022,9 @@ contains
      !======================================================================
      {#IFDEF M1
    
-     ! Choose epsR in the SAME UNITS as the CONSERVED variables.
-     ! In BHAC-M1 your evolved nrad/erad are densitized already, so m1_E_atmo
-     ! is a reasonable minimal admissible value in conserved form.
-     epsR(ixI^S) = m1_E_atmo
+     ! Use species-appropriate conserved floors for number and energy.
+     epsN(ixI^S) = m1_N_atmo
+     epsE(ixI^S) = m1_E_atmo
    
      {^KSP&
        !-------------------------------------------------------------
@@ -1044,7 +1044,7 @@ contains
           end select
        end if
    
-       call get_theta(ixI^L,ixC^L,idims,epsR,inv_lambda(ixI^S),sCT%w%w(ixI^S,nrad^KSP_), &
+       call get_theta(ixI^L,ixC^L,idims,epsN,inv_lambda(ixI^S),sCT%w%w(ixI^S,nrad^KSP_), &
                       flow_dA,fhigh_dA,theta_n)
    
        ! --- erad constraint ---
@@ -1060,7 +1060,7 @@ contains
           end select
        end if
    
-       call get_theta(ixI^L,ixC^L,idims,epsR,inv_lambda(ixI^S),sCT%w%w(ixI^S,erad^KSP_), &
+       call get_theta(ixI^L,ixC^L,idims,epsE,inv_lambda(ixI^S),sCT%w%w(ixI^S,erad^KSP_), &
                       flow_dA,fhigh_dA,theta_e)
    
        ! Combine: enforce BOTH constraints

@@ -65,10 +65,14 @@ module mod_gw_br_Iij_Qij
             htot(ix^D) = htot(ix^D) - 1.0d0
           else
             if (eos_has_ymu()) then
-              call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),w(ix^D,ye_),eps_tmp, &
-                                             prs=prs_st(ix^D),ymu=w(ix^D,ymu_))
+              Temp(ix^D) = eos_bound_temp(Temp(ix^D))
+              rho_st = eos_bound_rho(rho_st)
+              call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),eos_bound_ye(w(ix^D,ye_)),eps_tmp, &
+                                             prs=prs_st(ix^D),ymu=eos_bound_ymu(w(ix^D,ymu_)))
             else
-              call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),w(ix^D,ye_),eps_tmp,prs=prs_st(ix^D))
+              Temp(ix^D) = eos_bound_temp(Temp(ix^D))
+              rho_st = eos_bound_rho(rho_st)
+              call eos_temp_get_all_one_grid(rho_st,Temp(ix^D),eos_bound_ye(w(ix^D,ye_)),eps_tmp,prs=prs_st(ix^D))
             endif
             !Temp(ix^D) = Temp(ix^D) * mev_gf
             !! htot_st:
@@ -350,10 +354,10 @@ module mod_gw_br_Iij_Qij
         ! eps should be same definition when B-field is presented
         if (eos_uses_ye()) then
           if (eos_has_ymu()) then
-            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_), &
-                                      ymu=w(ix^D,ymu_))
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=eos_bound_temp(w(ix^D,T_eps_)), ye=eos_bound_ye(w(ix^D,ye_)), &
+                                      ymu=eos_bound_ymu(w(ix^D,ymu_)))
           else
-            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=eos_bound_temp(w(ix^D,T_eps_)), ye=eos_bound_ye(w(ix^D,ye_)))
           endif
         else
           eps = w(ix^D, T_eps_)
@@ -560,10 +564,10 @@ D_st_dot = 0.0d0
         if (eos_uses_ye()) then
           ! using rho* to get eps
           if (eos_has_ymu()) then
-            call eos_get_eps_one_grid(dummy,D_st,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_), &
-                                      ymu=w(ix^D,ymu_))
+            call eos_get_eps_one_grid(dummy,D_st,eps,temp=eos_bound_temp(w(ix^D,T_eps_)), ye=eos_bound_ye(w(ix^D,ye_)), &
+                                      ymu=eos_bound_ymu(w(ix^D,ymu_)))
           else
-            call eos_get_eps_one_grid(dummy,D_st,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+            call eos_get_eps_one_grid(dummy,D_st,eps,temp=eos_bound_temp(w(ix^D,T_eps_)), ye=eos_bound_ye(w(ix^D,ye_)))
           endif
           !call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
         else
@@ -710,10 +714,10 @@ bracket_dot = 0.0d0
         ! eps should be same definition when B-field is presented
         if (eos_uses_ye()) then
           if (eos_has_ymu()) then
-            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_), &
-                                      ymu=w(ix^D,ymu_))
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=eos_bound_temp(w(ix^D,T_eps_)), ye=eos_bound_ye(w(ix^D,ye_)), &
+                                      ymu=eos_bound_ymu(w(ix^D,ymu_)))
           else
-            call eos_get_eps_one_grid(dummy,rho,eps,temp=w(ix^D,T_eps_), ye=w(ix^D,ye_))
+            call eos_get_eps_one_grid(dummy,rho,eps,temp=eos_bound_temp(w(ix^D,T_eps_)), ye=eos_bound_ye(w(ix^D,ye_)))
           endif
         else
           eps = w(ix^D, T_eps_)
@@ -796,4 +800,3 @@ bracket_dot = 0.0d0
   end subroutine STF
 
 end module mod_gw_br_Iij_Qij
-

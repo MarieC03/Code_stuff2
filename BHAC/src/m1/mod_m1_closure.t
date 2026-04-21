@@ -278,7 +278,7 @@ contains
     integer :: nidx, eidx, fidx^C
     integer, parameter :: m1_nvars_loc = 1 + 1 + (^NC)
     double precision :: fmaxfact, sqrtg_safe
-    double precision :: Eprim, Nprim, F2, Fmax2, fluxfact
+    double precision :: Eprim, Nrad_prim, F2, Fmax2, fluxfact
     double precision, dimension(^NC) :: F_low, F_up
 
     fmaxfact = 0.999d0
@@ -300,23 +300,24 @@ contains
       end if
 
       Eprim = wstate(ix^D,eidx) / sqrtg_safe
-      Nprim = wstate(ix^D,nidx) / sqrtg_safe
+      Nrad_prim = wstate(ix^D,nidx) / sqrtg_safe
 
       if ((.not. ieee_is_finite(Eprim)) .or. (Eprim .lt. m1_E_atmo)) then
         Eprim = m1_E_atmo
       end if
-      if ((.not. ieee_is_finite(Nprim)) .or. (Nprim .lt. m1_N_atmo)) then
-        Nprim = m1_N_atmo
+      if ((.not. ieee_is_finite(Nrad_prim)) .or. (Nrad_prim .lt. m1_N_atmo)) then
+        Nrad_prim = m1_N_atmo
       end if
 
       wstate(ix^D,eidx) = Eprim * sqrtg_safe
-      wstate(ix^D,nidx) = Nprim * sqrtg_safe
+      wstate(ix^D,nidx) = Nrad_prim * sqrtg_safe
 
       {^C&
       if (.not. ieee_is_finite(wstate(ix^D,fidx^C))) then
         wstate(ix^D,fidx^C) = 0.0d0
       end if
-      F_low(^C) = wstate(ix^D,fidx^C)
+      ! wstate stores densitized conserved fluxes; enforce realizability in primitive units.
+      F_low(^C) = wstate(ix^D,fidx^C) / sqrtg_safe
       \}
 
       call metricM1%raise_ixD(ix^D,F_low,F_up)
@@ -326,7 +327,7 @@ contains
         F2 = 0.0d0
         {^C& wstate(ix^D,fidx^C) = 0.0d0 \}
       else if (F2 .lt. 0.0d0) then
-        if (dabs(F2) .lt. 1.0d-12*max(wstate(ix^D,eidx)**2,M1_TINY)) then
+        if (dabs(F2) .lt. 1.0d-12*max(Eprim**2,M1_TINY)) then
           F2 = 0.0d0
         else
           F2 = 0.0d0
@@ -334,7 +335,7 @@ contains
         end if
       end if
 
-      Fmax2 = (fmaxfact*wstate(ix^D,eidx))*(fmaxfact*wstate(ix^D,eidx))
+      Fmax2 = (fmaxfact*Eprim)*(fmaxfact*Eprim)
       if (F2 .gt. Fmax2) then
         fluxfact = dsqrt(Fmax2/max(F2,M1_TINY))
         {^C& wstate(ix^D,fidx^C) = fluxfact*wstate(ix^D,fidx^C) \}

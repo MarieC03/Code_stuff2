@@ -1,4 +1,5 @@
 module mod_rootfinding
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   implicit none
 contains
 
@@ -39,6 +40,11 @@ contains
     b  = zmax
     fa = func(a)
     fb = func(b)
+
+    if (.not. ieee_is_finite(fa) .or. .not. ieee_is_finite(fb)) then
+       return_code = 2
+       return
+    end if
 
     ! check if the bounds are already the root
     if ( dabs(fa) == 0.0d0 ) then
@@ -118,7 +124,15 @@ contains
        a  = b  ! move last best guess to a
        fa = fb
        b  = b + merge(d, sign(tol,xm), dabs(d) > tol) ! evaluate new trail root
+       if (.not. ieee_is_finite(b)) then
+          return_code = 2
+          return
+       end if
        fb = func(b)
+       if (.not. ieee_is_finite(fb)) then
+          return_code = 2
+          return
+       end if
     end do
     ! if the root is not found
     return_code = 1

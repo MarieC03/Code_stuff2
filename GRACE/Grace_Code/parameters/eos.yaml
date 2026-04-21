@@ -126,7 +126,9 @@ eos:
       default: true
       description: >
         Read and use the muon lepton sub-tables. This must be true for the
-        5-species muonic Weakhub transport path.
+        5-species muonic Weakhub transport path. In 1- and 3-species M1 runs
+        the fluid EOS may still include muons, but the neutrino rates ignore
+        explicit Y_mu and nu_mu / anti-nu_mu transport.
 
     atmosphere_beta_eq:
       type: bool

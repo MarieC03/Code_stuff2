@@ -209,13 +209,42 @@ module mod_eos
 
 contains
 
-  logical function eos_uses_ye()
+  pure logical function eos_uses_ye()
     eos_uses_ye = (eos_type == tabulated .or. eos_type == leptonic)
   end function eos_uses_ye
 
-  logical function eos_has_ymu()
+  pure logical function eos_has_ymu()
     eos_has_ymu = (eos_type == leptonic)
   end function eos_has_ymu
+
+  pure double precision function eos_bound_rho(rho_in)
+    double precision, intent(in) :: rho_in
+
+    eos_bound_rho = max(small_rho, rho_in)
+    if (eos_uses_ye()) eos_bound_rho = min(eos_rhomax, eos_bound_rho)
+  end function eos_bound_rho
+
+  pure double precision function eos_bound_temp(temp_in)
+    double precision, intent(in) :: temp_in
+
+    if (eos_uses_ye()) then
+      eos_bound_temp = max(eos_tempmin, min(eos_tempmax, temp_in))
+    else
+      eos_bound_temp = max(small_temp, temp_in)
+    endif
+  end function eos_bound_temp
+
+  pure double precision function eos_bound_ye(ye_in)
+    double precision, intent(in) :: ye_in
+
+    eos_bound_ye = max(eos_yemin, min(eos_yemax, ye_in))
+  end function eos_bound_ye
+
+  pure double precision function eos_bound_ymu(ymu_in)
+    double precision, intent(in) :: ymu_in
+
+    eos_bound_ymu = max(eos_ymumin, min(eos_ymumax, ymu_in))
+  end function eos_bound_ymu
 
   subroutine eos_check
 

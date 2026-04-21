@@ -81,6 +81,15 @@ GRACE_HOST_DEVICE inline constexpr int m1_num_species()
     return GRACE_M1_NUM_SPECIES;
 }
 
+GRACE_HOST_DEVICE inline constexpr bool m1_explicit_muon_transport_enabled()
+{
+#ifdef M1_NU_FIVESPECIES
+    return true;
+#else
+    return false;
+#endif
+}
+
 GRACE_HOST_DEVICE inline constexpr int m1_evolved_index(int base_idx, int ispec)
 {
     return base_idx + ispec * GRACE_N_M1_VARS;

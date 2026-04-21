@@ -628,6 +628,12 @@ subroutine m1_correct_asymptotic_fluxes(ixI^L, ixO^L, tvdlfeps1, dxdim, idims, w
 
   ! internals 
   double precision, dimension(ixO^S) :: A  ! Now an array over ixO range
+  double precision, dimension(ixO^S) :: alpha, denom, denom_safe
+  double precision, dimension(ixO^S) :: F_llf, F_cor, Fmin, Fmax
+  logical, dimension(ixO^S) :: use_left, use_right, bad_denom
+  logical, dimension(ixO^S) :: near_n_floor, near_e_floor, force_llf
+  double precision, parameter :: hll_denom_floor = 1.0d-30
+  double precision, parameter :: A_llf_floor = 5.0d-2
   integer :: iw, ixR^L
   integer :: i, j
   {#IFDEF UNIT_TESTS
@@ -658,6 +664,7 @@ subroutine m1_correct_asymptotic_fluxes(ixI^L, ixO^L, tvdlfeps1, dxdim, idims, w
     
     ! Handle overflow (already handled by MIN above, but explicit check)
     where(A(ixO^S) > 1.0d0) A(ixO^S) = 1.0d0
+    where(A(ixO^S) < 0.0d0) A(ixO^S) = 0.0d0
                         
     wRC(ixO^S,erad^KSP_) = max(wRC(ixO^S,erad^KSP_), m1_E_atmo)
     wRC(ixO^S,nrad^KSP_) = max(wRC(ixO^S,nrad^KSP_), m1_N_atmo)
@@ -668,26 +675,101 @@ subroutine m1_correct_asymptotic_fluxes(ixI^L, ixO^L, tvdlfeps1, dxdim, idims, w
     ! Correct energy flux
     !-------------------- erad --------------------
     iw = erad^KSP_
-    fC(ixO^S,iw,idims) = (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw) + &
-                          A(ixO^S)*tvdlfeps1*cminC(ixO^S,iw)*cmaxC(ixO^S,iw)* &
-                          (wRC(ixO^S,iw) - wLC(ixO^S,iw))) / &
-                         (cmaxC(ixO^S,iw) - cminC(ixO^S,iw))
+    alpha(ixO^S) = max(dabs(cminC(ixO^S,iw)), dabs(cmaxC(ixO^S,iw)))
+    denom(ixO^S) = cmaxC(ixO^S,iw) - cminC(ixO^S,iw)
+    denom_safe(ixO^S) = denom(ixO^S)
+    where(dabs(denom_safe(ixO^S)) < hll_denom_floor) denom_safe(ixO^S) = hll_denom_floor
+    use_left(ixO^S) = cminC(ixO^S,iw) >= 0.0d0
+    use_right(ixO^S) = cmaxC(ixO^S,iw) <= 0.0d0
+    bad_denom(ixO^S) = dabs(denom(ixO^S)) < hll_denom_floor
+    F_llf(ixO^S) = 0.5d0*(fLC(ixO^S,iw) + fRC(ixO^S,iw)) - &
+                   0.5d0*alpha(ixO^S)*(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    F_cor(ixO^S) = (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw) + &
+                    A(ixO^S)*tvdlfeps1*cminC(ixO^S,iw)*cmaxC(ixO^S,iw)* &
+                    (wRC(ixO^S,iw) - wLC(ixO^S,iw))) / denom_safe(ixO^S)
+    fC(ixO^S,iw,idims) = F_llf(ixO^S)
+    where(use_left(ixO^S))
+      fC(ixO^S,iw,idims) = fLC(ixO^S,iw)
+    elsewhere(use_right(ixO^S))
+      fC(ixO^S,iw,idims) = fRC(ixO^S,iw)
+    elsewhere(.not. bad_denom(ixO^S))
+      fC(ixO^S,iw,idims) = F_cor(ixO^S)
+    endwhere
     
     !-------------------- nrad --------------------
     iw = nrad^KSP_
-    fC(ixO^S,iw,idims) = (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw) + &
-                          A(ixO^S)*tvdlfeps1*cminC(ixO^S,iw)*cmaxC(ixO^S,iw)* &
-                          (wRC(ixO^S,iw) - wLC(ixO^S,iw))) / &
-                         (cmaxC(ixO^S,iw) - cminC(ixO^S,iw))
+    alpha(ixO^S) = max(dabs(cminC(ixO^S,iw)), dabs(cmaxC(ixO^S,iw)))
+    denom(ixO^S) = cmaxC(ixO^S,iw) - cminC(ixO^S,iw)
+    denom_safe(ixO^S) = denom(ixO^S)
+    where(dabs(denom_safe(ixO^S)) < hll_denom_floor) denom_safe(ixO^S) = hll_denom_floor
+    use_left(ixO^S) = cminC(ixO^S,iw) >= 0.0d0
+    use_right(ixO^S) = cmaxC(ixO^S,iw) <= 0.0d0
+    bad_denom(ixO^S) = dabs(denom(ixO^S)) < hll_denom_floor
+    near_n_floor(ixO^S) = (wLC(ixO^S,iw) <= 2.0d0*m1_N_atmo) .or. &
+                          (wRC(ixO^S,iw) <= 2.0d0*m1_N_atmo)
+    F_llf(ixO^S) = 0.5d0*(fLC(ixO^S,iw) + fRC(ixO^S,iw)) - &
+                   0.5d0*alpha(ixO^S)*(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    F_cor(ixO^S) = (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw) + &
+                    A(ixO^S)*tvdlfeps1*cminC(ixO^S,iw)*cmaxC(ixO^S,iw)* &
+                    (wRC(ixO^S,iw) - wLC(ixO^S,iw))) / denom_safe(ixO^S)
+    Fmin(ixO^S) = F_llf(ixO^S) - 0.5d0*alpha(ixO^S)*dabs(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    Fmax(ixO^S) = F_llf(ixO^S) + 0.5d0*alpha(ixO^S)*dabs(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    fC(ixO^S,iw,idims) = F_llf(ixO^S)
+    where(use_left(ixO^S))
+      fC(ixO^S,iw,idims) = fLC(ixO^S,iw)
+    elsewhere(use_right(ixO^S))
+      fC(ixO^S,iw,idims) = fRC(ixO^S,iw)
+    elsewhere(near_n_floor(ixO^S) .or. bad_denom(ixO^S))
+      fC(ixO^S,iw,idims) = F_llf(ixO^S)
+    elsewhere
+      fC(ixO^S,iw,idims) = min(max(F_cor(ixO^S), Fmin(ixO^S)), Fmax(ixO^S))
+    endwhere
 
     !-------------------- frad components --------------------
     {^C&
     iw = frad^KSP^C_
-    fC(ixO^S,iw,idims) = (A(ixO^S)**2 * (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw)) + &
-                          A(ixO^S)*tvdlfeps1*cmaxC(ixO^S,iw)*cminC(ixO^S,iw)* &
-                          (wRC(ixO^S,iw) - wLC(ixO^S,iw))) / &
-                         (cmaxC(ixO^S,iw) - cminC(ixO^S,iw)) + &
-                         0.5d0 * (1.0d0 - A(ixO^S)**2) * (fLC(ixO^S,iw) + fRC(ixO^S,iw))
+    alpha(ixO^S) = max(dabs(cminC(ixO^S,iw)), dabs(cmaxC(ixO^S,iw)))
+    denom(ixO^S) = cmaxC(ixO^S,iw) - cminC(ixO^S,iw)
+    denom_safe(ixO^S) = denom(ixO^S)
+    where(dabs(denom_safe(ixO^S)) < hll_denom_floor) denom_safe(ixO^S) = hll_denom_floor
+    use_left(ixO^S) = cminC(ixO^S,iw) >= 0.0d0
+    use_right(ixO^S) = cmaxC(ixO^S,iw) <= 0.0d0
+    bad_denom(ixO^S) = dabs(denom(ixO^S)) < hll_denom_floor
+    near_e_floor(ixO^S) = (wLC(ixO^S,erad^KSP_) <= 2.0d0*m1_E_atmo) .or. &
+                          (wRC(ixO^S,erad^KSP_) <= 2.0d0*m1_E_atmo)
+    F_llf(ixO^S) = 0.5d0*(fLC(ixO^S,iw) + fRC(ixO^S,iw)) - &
+                   0.5d0*alpha(ixO^S)*(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    if (m1_frad_LLF) then
+      F_cor(ixO^S) = F_llf(ixO^S)
+    else if (m1_frad_A2_A3) then
+      F_cor(ixO^S) = A(ixO^S)**2 * (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw) + &
+                      A(ixO^S)*tvdlfeps1*cminC(ixO^S,iw)*cmaxC(ixO^S,iw)*(wRC(ixO^S,iw) - wLC(ixO^S,iw))) / &
+                      denom_safe(ixO^S) + 0.5d0*(1.0d0 - A(ixO^S)**2)*(fLC(ixO^S,iw) + fRC(ixO^S,iw))
+    else if (m1_frad_A2_A) then
+      F_cor(ixO^S) = (A(ixO^S)**2 * (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw)) + &
+                      A(ixO^S)*tvdlfeps1*cmaxC(ixO^S,iw)*cminC(ixO^S,iw)*(wRC(ixO^S,iw) - wLC(ixO^S,iw))) / &
+                      denom_safe(ixO^S) + 0.5d0*(1.0d0 - A(ixO^S)**2)*(fLC(ixO^S,iw) + fRC(ixO^S,iw))
+    else if (m1_parabolic) then
+      F_cor(ixO^S) = 0.5d0*(fLC(ixO^S,iw) + fRC(ixO^S,iw))
+    else
+      F_cor(ixO^S) = A(ixO^S)**2 * (cmaxC(ixO^S,iw)*fLC(ixO^S,iw) - cminC(ixO^S,iw)*fRC(ixO^S,iw) + &
+                      tvdlfeps1*cminC(ixO^S,iw)*cmaxC(ixO^S,iw)*(wRC(ixO^S,iw) - wLC(ixO^S,iw))) / &
+                      denom_safe(ixO^S) + 0.5d0*(1.0d0 - A(ixO^S)**2)*(fLC(ixO^S,iw) + fRC(ixO^S,iw))
+    end if
+    Fmin(ixO^S) = F_llf(ixO^S) - 0.5d0*alpha(ixO^S)*dabs(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    Fmax(ixO^S) = F_llf(ixO^S) + 0.5d0*alpha(ixO^S)*dabs(wRC(ixO^S,iw) - wLC(ixO^S,iw))
+    force_llf(ixO^S) = near_n_floor(ixO^S) .or. near_e_floor(ixO^S) .or. &
+                       bad_denom(ixO^S) .or. (A(ixO^S) <= A_llf_floor)
+    fC(ixO^S,iw,idims) = F_llf(ixO^S)
+    where(use_left(ixO^S))
+      fC(ixO^S,iw,idims) = fLC(ixO^S,iw)
+    elsewhere(use_right(ixO^S))
+      fC(ixO^S,iw,idims) = fRC(ixO^S,iw)
+    elsewhere(force_llf(ixO^S))
+      fC(ixO^S,iw,idims) = F_llf(ixO^S)
+    elsewhere
+      fC(ixO^S,iw,idims) = min(max(F_cor(ixO^S), Fmin(ixO^S)), Fmax(ixO^S))
+    endwhere
     \}
 
   \}   ! end KSP loop

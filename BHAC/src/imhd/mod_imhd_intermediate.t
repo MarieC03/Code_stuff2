@@ -128,14 +128,14 @@ module mod_imhd_intermediate
     if ( present(Ptot) .or. present(h_th) .or. present(htot) .or. present(P_th) .or. present(eps) .or. present(ub_bernoulli) ) then
        {do ix^D = ixO^LIM^D \}
          if (eos_uses_ye()) then
-           temp_local = w(ix^D, T_eps_)
-           rho_local  = w(ix^D, rho_)
+          temp_local = eos_bound_temp(w(ix^D, T_eps_))
+          rho_local  = eos_bound_rho(w(ix^D, rho_))
            if (eos_has_ymu()) then
-             call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+             call eos_temp_get_all_one_grid(rho_local,temp_local,eos_bound_ye(w(ix^D,ye_)),&
                                             eps_tmp(ix^D),prs=prs_tmp(ix^D),&
-                                            ymu=w(ix^D,ymu_))
+                                            ymu=eos_bound_ymu(w(ix^D,ymu_)))
            else
-             call eos_temp_get_all_one_grid(rho_local,temp_local,w(ix^D,ye_),&
+             call eos_temp_get_all_one_grid(rho_local,temp_local,eos_bound_ye(w(ix^D,ye_)),&
                                             eps_tmp(ix^D),prs=prs_tmp(ix^D))
            endif
          else
@@ -345,9 +345,16 @@ module mod_imhd_intermediate
     ! it has pp_ only
     if (eos_uses_ye()) then
          if (eos_has_ymu()) then
+           w(T_eps_) = eos_bound_temp(w(T_eps_))
+           w(rho_) = eos_bound_rho(w(rho_))
+           w(ye_) = eos_bound_ye(w(ye_))
+           w(ymu_) = eos_bound_ymu(w(ymu_))
            call eos_temp_get_all_one_grid(w(rho_),w(T_eps_),w(ye_),&
                                           dummy, prs=w(pp_), ymu=w(ymu_))
          else
+           w(T_eps_) = eos_bound_temp(w(T_eps_))
+           w(rho_) = eos_bound_rho(w(rho_))
+           w(ye_) = eos_bound_ye(w(ye_))
            call eos_temp_get_all_one_grid(w(rho_),w(T_eps_),w(ye_),&
                                           dummy, prs=w(pp_))
          endif

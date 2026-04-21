@@ -576,14 +576,14 @@ module mod_full_gr_source
 
     {do ix^D = ixO^LIM^D \}
         if (eos_uses_ye()) then
-          temp_local = wCT(ix^D,T_eps_)
-          rho_local  = wCT(ix^D,rho_)
+          temp_local = eos_bound_temp(wCT(ix^D,T_eps_))
+          rho_local  = eos_bound_rho(wCT(ix^D,rho_))
           if (eos_has_ymu()) then
-            call eos_temp_get_all_one_grid(rho_local,temp_local,wCT(ix^D,ye_),&
+            call eos_temp_get_all_one_grid(rho_local,temp_local,eos_bound_ye(wCT(ix^D,ye_)),&
                                            eps_tmp(ix^D),prs=prs_tmp(ix^D),&
-                                           ymu=wCT(ix^D,ymu_))
+                                           ymu=eos_bound_ymu(wCT(ix^D,ymu_)))
           else
-            call eos_temp_get_all_one_grid(rho_local,temp_local,wCT(ix^D,ye_),&
+            call eos_temp_get_all_one_grid(rho_local,temp_local,eos_bound_ye(wCT(ix^D,ye_)),&
                                            eps_tmp(ix^D),prs=prs_tmp(ix^D))
           endif
         else

@@ -488,7 +488,7 @@ GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
   const double mu_numu_default = 0.0;
   double mu_numu_loc = mu_numu_default;
   double mu_numubar = -mu_numu_default;
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   if (use_muonic_eos) {
     mu_numu_loc = F.mu_mu + F.mu_p - F.mu_n - Qnp;
     mu_numubar = -mu_numu_loc;
@@ -534,7 +534,7 @@ GRACE_HOST_DEVICE inline fugacity_state make_fugacity_state(
     if (::isfinite(fac_nue))    F.eta_nu[NUE]    *= fac_nue;
     if (::isfinite(fac_nuebar)) F.eta_nu[NUEBAR] *= fac_nuebar;
 
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
     const double fac_numu    = 1.0 - Kokkos::exp(-F.tau_n[NUMU]);
     const double fac_numubar = 1.0 - Kokkos::exp(-F.tau_n[NUMUBAR]);
     if (::isfinite(fac_numu))    F.eta_nu[NUMU]    *= fac_numu;
@@ -668,7 +668,7 @@ GRACE_HOST_DEVICE inline void add_pair_process_emission(const fugacity_state& F,
 
   double R_pair_x = (1.0/9.0) * pair_const * (ipow<2>(Cv - Ca) + ipow<2>(Cv + Ca - 2.0)) /
                     (block[NUX] * block[NUX]);
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   // In 5-spec mode NUX carries only the tau/tau-bar contribution.
   R_pair_x *= 0.5;
 #endif
@@ -677,7 +677,7 @@ GRACE_HOST_DEVICE inline void add_pair_process_emission(const fugacity_state& F,
     out.Q[NUX] += R_pair_x * eps_fraction;
   }
 
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   const double R_pair_numu = (1.0/36.0) * pair_const * (ipow<2>(Cv - Ca) + ipow<2>(Cv + Ca - 2.0)) /
                              (block[NUMU] * block[NUMUBAR]);
   if (::isfinite(R_pair_numu) && (R_pair_numu > 0.0)) {
@@ -709,7 +709,7 @@ GRACE_HOST_DEVICE inline void add_plasmon_decay_emission(const fugacity_state& F
   (void)R_gamma;
 
   double R_gamma_x = 4.0 * ipow<2>(Cv - 1.0) * gamma_const / (block[NUX] * block[NUX]);
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   // In 5-spec mode NUX stores only the tau/tau-bar pair.
   R_gamma_x *= 0.5;
 #endif
@@ -718,7 +718,7 @@ GRACE_HOST_DEVICE inline void add_plasmon_decay_emission(const fugacity_state& F
     out.Q[NUX] += Q_gamma * R_gamma_x;
   }
 
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   const double R_gamma_numu = ipow<2>(Cv - 1.0) * gamma_const / (block[NUMU] * block[NUMUBAR]);
   if (::isfinite(R_gamma_numu) && (R_gamma_numu > 0.0)) {
     out.R[NUMU] += R_gamma_numu;
@@ -739,7 +739,7 @@ GRACE_HOST_DEVICE inline void add_brems_emission(const fugacity_state& F, rates_
     double w_numu = 0.0;
     double w_numubar = 0.0;
     double w_nux = 4.0;
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
     w_numu = 1.0;
     w_numubar = 1.0;
     w_nux = 2.0;
@@ -783,7 +783,7 @@ GRACE_HOST_DEVICE inline void calc_kirchhoff_emission(
 
   if (!include_heavy_species) return;
 
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUMU, Q_out, R_out);
   calc_kirchhoff_emission_species(F, g_nu, kappa_a, kappa_n, NUMUBAR, Q_out, R_out);
 #endif
@@ -816,7 +816,7 @@ GRACE_HOST_DEVICE inline void add_kirchhoff_absorption_opacity_from_QR(
     const std::array<double, NUMSPECIES>& R_in,
     std::array<double, NUMSPECIES>& kappa_a_add,
     std::array<double, NUMSPECIES>& kappa_n_add) {
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   add_kirchhoff_absorption_opacity_species_from_QR(F, g_nu, Q_in, R_in, NUMU, kappa_a_add, kappa_n_add);
   add_kirchhoff_absorption_opacity_species_from_QR(F, g_nu, Q_in, R_in, NUMUBAR, kappa_a_add, kappa_n_add);
 #endif
@@ -854,7 +854,7 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species_weakhub(
   }
 
   std::array<double, NUMSPECIES> g_nu{{1,1,0,0,4}};
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   g_nu = {{1,1,1,1,2}};
 #endif
   calc_kirchhoff_emission(F, g_nu, rates.kappa_a, rates.kappa_n, true, rates.Q, rates.R);
@@ -872,7 +872,7 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species_weakhub(
     rates.kappa_a[s] += kappa_a_add[s];
     rates.kappa_n[s] += kappa_n_add[s];
   }
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   if (F.rho_cgs < 1.0e10 || F.temp_mev < 2.5) {
     rates.Q[NUMU] = rates.R[NUMU] = rates.kappa_a[NUMU] = rates.kappa_n[NUMU] = 0.0;
     rates.Q[NUMUBAR] = rates.R[NUMUBAR] = rates.kappa_a[NUMUBAR] = rates.kappa_n[NUMUBAR] = 0.0;
@@ -963,7 +963,7 @@ GRACE_HOST_DEVICE inline nu_rates_all_out compute_all_species(
   if (bremsstrahlung)    add_brems_emission(F, rates);
 
   std::array<double, NUMSPECIES> g_nu{{1,1,0,0,4}};
-#ifdef M1_FIVESPECIES
+#ifdef M1_NU_FIVESPECIES
   g_nu = {{1,1,1,1,2}};
 #endif
   std::array<double, NUMSPECIES> kappa_a_add{{0,0,0,0,0}}, kappa_n_add{{0,0,0,0,0}};

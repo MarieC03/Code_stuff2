@@ -103,7 +103,7 @@ contains
     !Note: have to make sure that wprim is prim since we need fluid vars
     use mod_m1_internal
     use mod_m1_beta_eq
-    use mod_eos, only: eos_rhomin, eos_rhomax, eos_yemin, eos_yemax, eos_tempmin, eos_tempmax
+    use mod_eos, only: eos_rhomin, eos_rhomax, eos_yemin, eos_yemax, eos_tempmin, eos_tempmax, small_rho_thr
     use, intrinsic :: ieee_arithmetic  ! NEW: For NaN checking
     {#IFDEF UNIT_TESTS
     use mod_m1_tests
@@ -368,11 +368,16 @@ contains
     use mod_m1_constants
     use mod_m1_eas_microphysical_gray
     use mod_eos, only: small_rho, small_temp, eos_yemin, eos_yemax, eos_ymumin, eos_ymumax, &
-         eos_tempmin, eos_tempmax, eos_temp_get_all_one_grid
+         eos_tempmin, eos_tempmax, eos_temp_get_all_one_grid, eos_bound_rho, eos_bound_temp, &
+         eos_bound_ye, eos_bound_ymu
     use mod_m1_eas_param
     use, intrinsic :: ieee_arithmetic
     {#IFDEF UNIT_TESTS
     use mod_m1_tests
+    use amrvacdef
+    }
+    {#IFNDEF UNIT_TESTS
+      include 'amrvacdef.f'
     }
     integer, intent(in) :: ix^D, ixI^L
     integer, intent(in) :: speciesKSP
@@ -414,12 +419,11 @@ contains
     eas(:) = 1.0d-30
     eas_eq(:) = 1.0d-60
 
-    rho_fluid = max(fluid_Prim(idx_rho), small_rho)
-    ye_fluid = min(max(fluid_Prim(idx_Ye), eos_yemin), eos_yemax)
-    T_fluid = max(fluid_Prim(idx_T), max(small_temp, eos_tempmin))
-    T_fluid = min(T_fluid, eos_tempmax)
+    rho_fluid = eos_bound_rho(max(fluid_Prim(idx_rho), small_rho))
+    ye_fluid = eos_bound_ye(fluid_Prim(idx_Ye))
+    T_fluid = eos_bound_temp(max(fluid_Prim(idx_T), small_temp))
     ymu_fluid = 0.0d0
-    if (m1_use_muons) ymu_fluid = min(max(fluid_Prim(idx_Ymu), eos_ymumin), eos_ymumax)
+    if (m1_use_muons) ymu_fluid = eos_bound_ymu(fluid_Prim(idx_Ymu))
 
     fluid_Prim(idx_rho) = rho_fluid
     fluid_Prim(idx_T) = T_fluid
@@ -448,18 +452,17 @@ contains
     if (.not. ieee_is_finite(abar1) .or. abar1 <= 0.0d0) abar1 = 0.0d0
     if (.not. ieee_is_finite(zbar1)) zbar1 = 0.0d0
 
-    select case(speciesKSP)
-    case(m1_i_nue)
+    if (speciesKSP == m1_i_nue) then
       chem_pot = mu_e + mu_p - mu_n - Qnp1
-    case(m1_i_nuebar)
+    else if (speciesKSP == m1_i_nuebar) then
       chem_pot = -(mu_e + mu_p - mu_n - Qnp1)
-    case(m1_i_mu)
+    else if (speciesKSP == m1_i_mu) then
       chem_pot = mu_mu + mu_p - mu_n - Qnp1
-    case(m1_i_mubar)
+    else if (speciesKSP == m1_i_mubar) then
       chem_pot = -(mu_mu + mu_p - mu_n - Qnp1)
-    case default
+    else
       chem_pot = 0.0d0
-    end select
+    end if
 
     eta_rad = chem_pot / max(T_fluid, 1.0d-12)
     eta_e = mu_e / max(T_fluid, 1.0d-12)

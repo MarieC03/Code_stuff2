@@ -179,18 +179,18 @@ module mod_gw_br
            rho_tmp  = sigma(ix^D,iigrid)
            !rho_tmp  = pw(igrid)%w(ix^D, D_) * pw(igrid)%w(ix^D, psi_metric_)**6
            if (eos_uses_ye()) then
-             temp_tmp = pw(igrid)%w(ix^D, T_eps_)
+             temp_tmp = eos_bound_temp(pw(igrid)%w(ix^D, T_eps_))
 
              ! fixme: HOTFIX bound the rho_max for khi proj.
-             rho_tmp = max( min( eos_rhomax, rho_tmp), eos_rhomin) 
+             rho_tmp = eos_bound_rho(max(min(eos_rhomax, rho_tmp), eos_rhomin))
 
-             if (eos_has_ymu()) then
-               call eos_temp_get_all_one_grid(rho_tmp, temp_tmp, pw(igrid)%w(ix^D,ye_),&
-                                              eps_tmp, prs=prs_tmp, ymu=pw(igrid)%w(ix^D,ymu_))
-             else
-               call eos_temp_get_all_one_grid(rho_tmp, temp_tmp, pw(igrid)%w(ix^D,ye_),&
-                                              eps_tmp, prs=prs_tmp)
-             endif
+              if (eos_has_ymu()) then
+                call eos_temp_get_all_one_grid(rho_tmp, temp_tmp, eos_bound_ye(pw(igrid)%w(ix^D,ye_)),&
+                                               eps_tmp, prs=prs_tmp, ymu=eos_bound_ymu(pw(igrid)%w(ix^D,ymu_)))
+              else
+                call eos_temp_get_all_one_grid(rho_tmp, temp_tmp, eos_bound_ye(pw(igrid)%w(ix^D,ye_)),&
+                                               eps_tmp, prs=prs_tmp)
+              endif
              !call eos_get_pressure_one_grid(prs_tmp, rho_tmp, dummy, temp=temp_tmp, ye=pw(igrid)%w(ix^D,ye_))
              !call eos_get_pressure_one_grid(prs_tmp, pw(igrid)%w(ix^D, rho_), dummy, temp=temp_tmp, ye=pw(igrid)%w(ix^D,ye_))
 
@@ -272,11 +272,11 @@ module mod_gw_br
 
             {do ix^D = ixM^LLIM^D \}
               if (eos_uses_ye()) then
-                rho  = pw(igrid)%w(ix^D,rho_)
-                temp = pw(igrid)%w(ix^D,T_eps_)
-                ye   = pw(igrid)%w(ix^D,ye_)
+                rho  = eos_bound_rho(pw(igrid)%w(ix^D,rho_))
+                temp = eos_bound_temp(pw(igrid)%w(ix^D,T_eps_))
+                ye   = eos_bound_ye(pw(igrid)%w(ix^D,ye_))
                 if (eos_has_ymu()) then
-                  call eos_get_eps_one_grid(dummy,rho,eps,temp=temp,ye=ye,ymu=pw(igrid)%w(ix^D,ymu_))
+                  call eos_get_eps_one_grid(dummy,rho,eps,temp=temp,ye=ye,ymu=eos_bound_ymu(pw(igrid)%w(ix^D,ymu_)))
                 else
                   call eos_get_eps_one_grid(dummy,rho,eps,temp=temp,ye=ye)
                 endif
@@ -619,4 +619,3 @@ module mod_gw_br
   end subroutine gw_br_get_h_00_grid
 
 end module mod_gw_br
-

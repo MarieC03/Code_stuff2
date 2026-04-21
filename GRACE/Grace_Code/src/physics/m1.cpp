@@ -88,7 +88,7 @@ void set_m1_eas(
 
     auto eos = eos::get().get_eos<eos_t>() ;  
 
-    auto eas_kind = grace::get_param<std::string>("m1","eas","kind") ; 
+    auto eas_kind = grace::resolve_m1_eas_kind_host() ;
 
     MDRangePolicy<Rank<GRACE_NSPACEDIM+1>,default_execution_space>
         policy({VEC(0,0,0),0},{VEC(nx+2*ngz,ny+2*ngz,nz+2*ngz),nq}) ;

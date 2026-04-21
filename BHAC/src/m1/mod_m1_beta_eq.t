@@ -4,7 +4,8 @@ module mod_m1_beta_eq
   use mod_m1_fermi
   use mod_m1_constants
   use mod_eos, only: eos_rhomin, eos_rhomax, eos_yemin, eos_yemax, eos_tempmin, eos_tempmax, &
-       eos_ymumin, eos_temp_get_all_one_grid, eos_has_ymu
+       eos_ymumin, eos_temp_get_all_one_grid, eos_has_ymu, eos_bound_rho, eos_bound_temp, &
+       eos_bound_ye, eos_bound_ymu
   use mod_rootfinding, only: rootfinding_global_multid_newton_raphson, numerical_jacobian
 
   implicit none
@@ -46,16 +47,16 @@ contains
     double precision :: dpderho,dpdrhoe,xa,xh,xn,xp,abar,zbar,mu_e,mu_n,mu_p,mu_mu,muhat,munu
     double precision :: T_fluid, Ye_fluid, Ymu_fluid, rho_fluid
 
-    stateEQ%fluid_prim_rho = fluid_Prim(idx_rho)
-    stateEQ%fluid_prim_Ye = fluid_Prim(idx_ye)
-    stateEQ%fluid_prim_T = fluid_Prim(idx_T)
+    stateEQ%fluid_prim_rho = eos_bound_rho(fluid_Prim(idx_rho))
+    stateEQ%fluid_prim_Ye = eos_bound_ye(fluid_Prim(idx_ye))
+    stateEQ%fluid_prim_T = eos_bound_temp(fluid_Prim(idx_T))
     stateEQ%fluid_prim_ymu = eos_ymumin
-    if (eos_has_ymu()) stateEQ%fluid_prim_ymu = fluid_Prim(idx_ymu)
+    if (eos_has_ymu()) stateEQ%fluid_prim_ymu = eos_bound_ymu(fluid_Prim(idx_ymu))
 
-    rho_fluid = stateEQ%fluid_prim_rho
-    Ye_fluid = stateEQ%fluid_prim_Ye
-    T_fluid = stateEQ%fluid_prim_T
-    Ymu_fluid = stateEQ%fluid_prim_ymu
+    rho_fluid = eos_bound_rho(stateEQ%fluid_prim_rho)
+    Ye_fluid = eos_bound_ye(stateEQ%fluid_prim_Ye)
+    T_fluid = eos_bound_temp(stateEQ%fluid_prim_T)
+    Ymu_fluid = eos_bound_ymu(stateEQ%fluid_prim_ymu)
     
     if(Ye_fluid > eos_yemax) write(*,*) "how"
     if (eos_has_ymu()) then

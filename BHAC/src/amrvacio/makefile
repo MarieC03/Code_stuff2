@@ -35,8 +35,7 @@ OBJECTS += amrio.o convert.o kracken.o  analysis.o collapse.o slice.o \
 #########################################################################
 # Dependencies:
 #########################################################################
-amrio.o : kracken.o mod_forest.o slice.o collapse.o mod_shell.o mod_eos_hybrid.o mod_healpix_det.o
+amrio.o : kracken.o mod_forest.o slice.o collapse.o mod_shell.o mod_eos_hybrid.o mod_eos_tabulated.o mod_eos_leptonic_parameters.o mod_eos_leptonic.o mod_healpix_det.o
 analysis.o : mod_constants.o
 mod_shell.o : mod_interpolate.o convert.o
 mod_healpix_det.o : mod_c2b_cart3d.o mod_post_process.o
-
