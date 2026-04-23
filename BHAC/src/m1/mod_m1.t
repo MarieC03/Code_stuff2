@@ -141,7 +141,6 @@ module mod_m1
     !internal variables
     integer :: ix^D,i,idir
     double precision, dimension(ixI^S) :: dthick, dthin
-    logical,          dimension(ixO^S) :: where_stag !KEN used for better vectorization
     double precision, dimension(ixI^S) :: lmthin, lmthick, lpthin, lpthick
     double precision, dimension(ixI^S) :: p_tmp, r_tmp, chi, lfact
     double precision, dimension(ixI^S) :: F_sq
@@ -225,7 +224,7 @@ module mod_m1
         dthick(ixO^S) = 1.0d0-dthin(ixO^S)
 
         M1_mini_pl = 1.0d-30
-        M1_mini_min = 1.0d-30
+        M1_mini_min = -1.0d-30
     
         ! Lambda for n, F are identical! 
         ! _____________ Store lambda + ____________________
@@ -241,13 +240,13 @@ module mod_m1
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     else if(m1_radice_speeds) then
         ! _____________ Store lambda + ____________________
-        lambda(ixO^S,erad^KSP_,1) = dabs( metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,1)) + metricM1%beta(ixO^S,1)) + M1_mini_pl
-        lambda(ixO^S,nrad^KSP_,1) = dabs( metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,1)) + metricM1%beta(ixO^S,1)) + M1_mini_pl
-        {^C& lambda(ixO^S,frad^KSP^C_,1) = dabs( metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,1)) + metricM1%beta(ixO^S,1)) + M1_mini_pl \} 
+        lambda(ixO^S,erad^KSP_,1) = -metricM1%beta(ixO^S,idim) + metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,metric_comp)) + M1_mini_pl
+        lambda(ixO^S,nrad^KSP_,1) = -metricM1%beta(ixO^S,idim) + metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,metric_comp)) + M1_mini_pl
+        {^C& lambda(ixO^S,frad^KSP^C_,1) = -metricM1%beta(ixO^S,idim) + metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,metric_comp)) + M1_mini_pl \} 
         ! ______________ Store lambda - ______________________
-        lambda(ixO^S,erad^KSP_,2) = dabs( metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,1)) - metricM1%beta(ixO^S,1)) + M1_mini_min
-        lambda(ixO^S,nrad^KSP_,2) = dabs( metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,1)) - metricM1%beta(ixO^S,1)) + M1_mini_min
-        {^C& lambda(ixO^S,frad^KSP^C_,2) = dabs( metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,1)) - metricM1%beta(ixO^S,1)) + M1_mini_min\} 
+        lambda(ixO^S,erad^KSP_,2) = -metricM1%beta(ixO^S,idim) - metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,metric_comp)) + M1_mini_min
+        lambda(ixO^S,nrad^KSP_,2) = -metricM1%beta(ixO^S,idim) - metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,metric_comp)) + M1_mini_min
+        {^C& lambda(ixO^S,frad^KSP^C_,2) = -metricM1%beta(ixO^S,idim) - metricM1%alp(ixO^S) * sqrt(metricM1%gammaUPij(ixO^S,metric_comp)) + M1_mini_min\} 
         ! ====================================================================== 
     !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     else 
@@ -283,33 +282,6 @@ module mod_m1
     !   {C& lambda(ix^D,frad^KSP^C_,2) = - 0.577350269189625d0 }
     ! end if 
     !{D& end do }
-
-    ! KEN I do not if to comment this out
-    ! in case wavespeeds too close to zero:
-
-    where_stag(ixO^S) = (lambda(ixO^S,nrad^KSP_,1) .le. 1.d-4) .and. &
-    (lambda(ixO^S,nrad^KSP_,2) .ge. -1.d-4)
-
-    !{D& do ix^D=ixOmin^D,ixOmax^D }
-    ! if((lambda(ix^D,nrad^KSP_,1) .le. 1.d-4) .and. (lambda(ix^D,nrad^KSP_,2) .ge. -1.d-4)) then
-    !   lambda(ix^D,nrad^KSP_,1) = 1.0d0
-    !   lambda(ix^D,erad^KSP_,1) = 1.0d0
-    !   {C& lambda(ix^D,frad^KSP^C_,1) = 1.0d0 }
-    !   lambda(ix^D,nrad^KSP_,2) = - 1.0d0
-    !   lambda(ix^D,erad^KSP_,2) = - 1.0d0
-    !   {C& lambda(ix^D,frad^KSP^C_,2) = - 1.0d0 }
-    ! end if 
-    !{D& end do }
-    where(where_stag(ixO^S))
-      lambda(ixO^S,nrad^KSP_,1) =  1.0d0
-      lambda(ixO^S,erad^KSP_,1) =  1.0d0
-      lambda(ixO^S,nrad^KSP_,2) = -1.0d0
-      lambda(ixO^S,erad^KSP_,2) = -1.0d0
-      {^C& lambda(ixO^S,frad^KSP^C_,1) = 1.0d0 \}
-      {^C& lambda(ixO^S,frad^KSP^C_,2) = -1.0d0 \}
-    end where
-
-
     \} ! end ^ KSP
     ! ====================================================================== 
     !###############################################################################################
@@ -982,8 +954,10 @@ end subroutine m1_correct_asymptotic_fluxes
     double precision :: t_backreact
   !!  logical :: m1_Iterative_Damping = .false. !.true.
     logical :: energy_good
+    logical :: momentum_good
     logical :: number_good
     logical :: proton_number_good
+    logical :: number_good_species
     type(m1_metric_helper) :: metricM1 	
     integer, dimension(1:6) :: signum
     integer :: i
@@ -994,6 +968,7 @@ end subroutine m1_correct_asymptotic_fluxes
     t_backreact = m1_tset_backreact !2.0d0 * m1_tset
 
     energy_good = .false.
+    momentum_good = .false.
     number_good = .false.
     proton_number_good = .false.
 
@@ -1068,13 +1043,14 @@ end subroutine m1_correct_asymptotic_fluxes
     \} ! end KSP
 
     energy_good = .false.
+    momentum_good = .false.
     number_good = .false.
     proton_number_good = .false.
 
     if(M1_FLUID_BACKREACT .and. (wcons(ix^D,rho_) .gt. m1_rho_floor)) then     
 
        if(qtC .ge. t_backreact)  then
-         call m1_add_backreaction(dtfactor,qdt,qtC,t_backreact,x,wcons,ix^D,ixI^L,sources,energy_good,number_good, proton_number_good)
+         call m1_add_backreaction(dtfactor,qdt,qtC,t_backreact,x,wcons,ix^D,ixI^L,sources,energy_good,momentum_good,number_good, proton_number_good)
        end if 
        
     end if  ! end M1_BACKREACT
@@ -1082,7 +1058,9 @@ end subroutine m1_correct_asymptotic_fluxes
 !KEN added if statement
     if((qtC .lt. t_backreact) .or. (.not. M1_FLUID_BACKREACT)) then
       energy_good = .true.
+      momentum_good = .true.
       number_good = .true.
+      proton_number_good = .true.
     end if 
 
     
@@ -1093,12 +1071,22 @@ end subroutine m1_correct_asymptotic_fluxes
        else
            wcons(ix^D, erad^KSP_) = wold(ix^D, erad^KSP_)       
        end if
-       if(number_good) then
+       number_good_species = .true.
+       if ((^KSP .eq. m1_i_nue) .or. (^KSP .eq. m1_i_nuebar)) then
+           number_good_species = number_good
+       else if (m1_use_muons .and. ((^KSP .eq. m1_i_mu) .or. (^KSP .eq. m1_i_mubar))) then
+           number_good_species = proton_number_good
+       end if
+       if(number_good_species) then
            wcons(ix^D, nrad^KSP_) = N(^KSP)
        else
            wcons(ix^D, nrad^KSP_) = wold(ix^D, nrad^KSP_)   
-       end if 
-        {^C& wcons(ix^D, frad^KSP^C_) = wrad(m1_flux^C_,^KSP) \}
+       end if
+       if(momentum_good) then
+         {^C& wcons(ix^D, frad^KSP^C_) = wrad(m1_flux^C_,^KSP) \}
+       else
+         {^C& wcons(ix^D, frad^KSP^C_) = wold(ix^D, frad^KSP^C_) \}
+       end if
        ! check if it is above atmo!
        ! KEN We do not need this. Nrad and erad prims are getting floored in coll
        !wcons(ix^D, erad^KSP_) = max(wcons(ix^D, erad^KSP_),m1_E_atmo)

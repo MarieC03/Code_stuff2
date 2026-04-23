@@ -6,7 +6,7 @@ module mod_m1_backreaction
       
     {#IFNDEF UNIT_TESTS_EXPLICIT
     {#IFNDEF M1_EXPLICIT
-    subroutine m1_add_backreaction(dtfactor,qdt,qtC,t_backreact,x,wcons,ix^D,ixI^L,sources,energy_good,number_good, proton_number_good)
+    subroutine m1_add_backreaction(dtfactor,qdt,qtC,t_backreact,x,wcons,ix^D,ixI^L,sources,energy_good,momentum_good,number_good, proton_number_good)
   
       use mod_m1_internal
       use mod_m1_eas
@@ -28,15 +28,18 @@ module mod_m1_backreaction
      double precision, intent(inout) :: wcons(ixI^S,1:nw)
      double precision, intent(inout) :: sources(1:m1_numvars_internal+1,^NS)   
      logical, intent(inout) :: energy_good
+     logical, intent(inout) :: momentum_good
      logical, intent(inout) :: number_good
      logical, intent(inout) :: proton_number_good
      ! internal
      double precision :: sources_tmp, sources_dye_tmp, sources_dymu_tmp
+     double precision :: sources_s_tmp(^NC), s_tmp(^NC)
      double precision :: tau_tmp, ye_tmp, ymu_tmp, dye_tmp, dymu_tmp, error_Ye, Delta_Ye
      double precision :: rel_error_Ye = 1.0d-3
      integer, dimension(1:6) :: signum
      integer :: i
   
+     signum(:) = 0
      if(m1_use_neutrinos) then
       signum(m1_i_nue) = 1
       signum(m1_i_nuebar) = -1
@@ -53,8 +56,8 @@ module mod_m1_backreaction
      {^KSP&
      do i=1,m1_numvars_internal+1
      if(sources(i,^KSP) .ne. sources(i,^KSP)) then
-       write(88,*) "SOURCES ARE NAN"
-       write(88,*) "i sources", i, sources(i,^KSP)
+       !write(88,*) "SOURCES ARE NAN"
+       !write(88,*) "i sources", i, sources(i,^KSP)
        sources(i,^KSP) = 0.0d0
      end if 
      end do 
@@ -63,13 +66,20 @@ module mod_m1_backreaction
      !-------------------------------------------
      ! check if tau with sum of energy-sources is positive:
      sources_tmp = 0.0d0 
+     {^C& sources_s_tmp(^C) = 0.0d0 \}
      {^KSP& sources_tmp  =  sources_tmp + sources(1,^KSP) \}
+     {^KSP& {^C& sources_s_tmp(^C) = sources_s_tmp(^C) + sources(1+^C,^KSP) \} \}
      tau_tmp =  wcons(ix^D,tau_) - qdt*dtfactor * sources_tmp 
-     if(tau_tmp<0.0d0) then
+     if((tau_tmp .ne. tau_tmp) .or. (tau_tmp<0.0d0)) then
         energy_good = .false.
      else
         energy_good = .true.
      endif 
+     momentum_good = energy_good
+     {^C&
+       s_tmp(^C) = wcons(ix^D,s^C_) - qdt*dtfactor * sources_s_tmp(^C)
+       if(s_tmp(^C) .ne. s_tmp(^C)) momentum_good = .false.
+     \}
      number_good = .true.
      proton_number_good = .true.
      {#IFDEF TABEOS
@@ -97,7 +107,6 @@ module mod_m1_backreaction
            dymu_tmp = wcons(ix^D,dymu_) - qdt*dtfactor * sources_dymu_tmp
            ymu_tmp = dymu_tmp / wcons(ix^D,d_)
            if (ymu_tmp < eos_ymumin .or. ymu_tmp > eos_ymumax) then
-             number_good = .false.
              proton_number_good = .false.
            end if
          end if
@@ -110,15 +119,19 @@ module mod_m1_backreaction
        if(energy_good) then 
             wcons(ix^D,tau_) = wcons(ix^D,tau_) - qdt*dtfactor * sources(1,^KSP)
        end if 
-       if(number_good) then
-         if ((^KSP .eq. m1_i_nue) .or. (^KSP .eq. m1_i_nuebar)) then
+       if ((^KSP .eq. m1_i_nue) .or. (^KSP .eq. m1_i_nuebar)) then
+         if(number_good) then
               wcons(ix^D,dye_) = wcons(ix^D,dye_) - qdt*dtfactor * signum(^KSP) * sources(1+^NC+1,^KSP)
-         else if (eos_has_ymu() .and. ((^KSP .eq. m1_i_mu) .or. (^KSP .eq. m1_i_mubar))) then
+         end if
+       else if (eos_has_ymu() .and. ((^KSP .eq. m1_i_mu) .or. (^KSP .eq. m1_i_mubar))) then
+         if(proton_number_good) then
               wcons(ix^D,dymu_) = wcons(ix^D,dymu_) - qdt*dtfactor * signum(^KSP) * sources(1+^NC+1,^KSP)
          end if
-       end if 
-       
-       {^C& wcons(ix^D,s^C_) = wcons(ix^D,s^C_) - qdt*dtfactor * sources(1+^C,^KSP) \}
+       end if
+      
+       if(momentum_good) then
+         {^C& wcons(ix^D,s^C_) = wcons(ix^D,s^C_) - qdt*dtfactor * sources(1+^C,^KSP) \}
+       end if
      
      \}
   

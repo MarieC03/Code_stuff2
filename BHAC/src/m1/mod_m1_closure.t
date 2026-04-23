@@ -279,9 +279,10 @@ contains
     integer, parameter :: m1_nvars_loc = 1 + 1 + (^NC)
     double precision :: fmaxfact, sqrtg_safe
     double precision :: Eprim, Nrad_prim, F2, Fmax2, fluxfact
+    double precision :: Ebound2, negF_tol, overF_tol
     double precision, dimension(^NC) :: F_low, F_up
 
-    fmaxfact = 0.999d0
+    fmaxfact = 1.0d0 - 1.0d-8
 
     {#IFNDEF UNIT_TESTS
     if (species .gt. ^NS) then
@@ -322,13 +323,16 @@ contains
 
       call metricM1%raise_ixD(ix^D,F_low,F_up)
       F2 = {^C& F_low(^C)*F_up(^C) +}
+      Ebound2 = max(Eprim*Eprim, M1_TINY)
+      negF_tol = 1.0d-10*Ebound2
+      overF_tol = 1.0d-10*Ebound2
 
       if (.not. ieee_is_finite(F2)) then
         F2 = 0.0d0
         {^C& wstate(ix^D,fidx^C) = 0.0d0 \}
       else if (F2 .lt. 0.0d0) then
-        if (dabs(F2) .lt. 1.0d-12*max(Eprim**2,M1_TINY)) then
-          F2 = 0.0d0
+        if (dabs(F2) .lt. negF_tol) then
+          F2 = dabs(F2)
         else
           F2 = 0.0d0
           {^C& wstate(ix^D,fidx^C) = 0.0d0 \}
@@ -336,7 +340,7 @@ contains
       end if
 
       Fmax2 = (fmaxfact*Eprim)*(fmaxfact*Eprim)
-      if (F2 .gt. Fmax2) then
+      if (F2 .gt. Ebound2 + overF_tol) then
         fluxfact = dsqrt(Fmax2/max(F2,M1_TINY))
         {^C& wstate(ix^D,fidx^C) = fluxfact*wstate(ix^D,fidx^C) \}
       end if
@@ -375,8 +379,10 @@ contains
     double precision :: fluxfact,W2, W3 
     double precision :: E1 ! internal E
     logical :: get_vel_W
-    double precision :: Fmag, fac, Fmax2
-    double precision :: fmaxfact = 0.999d0 !0.99999d0 !0.999d0
+    double precision :: Fmag, fac, Fmax2, Fbound2
+    double precision :: fmaxfact = 1.0d0 - 1.0d-8
+    double precision :: negF_tol = 1.0d-10
+    double precision :: overF_tol = 1.0d-10
     double precision :: epsF_rel = 1.0d-6
     double precision :: epsF_abs = 1.0d-30
     double precision :: Hmag2, Jsafe, scaleH, Jfloor
@@ -454,6 +460,7 @@ contains
     ! This is a point by point loop since rootfinding is required 
     E1 = max(stateM1%E, m1_E_atmo)
     if (.not. ieee_is_finite(E1)) E1 = m1_E_atmo
+    Fbound2 = max(E1*E1, M1_TINY)
 
     stateM1%F2 = {^C&stateM1%F_low(^C)*stateM1%F_up(^C)+}
     if (.not. ieee_is_finite(stateM1%F2)) then
@@ -461,8 +468,8 @@ contains
       {^C& stateM1%F_low(^C) = 0.0d0 \}
       {^C& stateM1%F_up(^C) = 0.0d0 \}
     else if (stateM1%F2 .lt. 0.0d0) then
-      if (dabs(stateM1%F2) .lt. 1.0d-12*max(E1*E1,M1_TINY)) then
-        stateM1%F2 = 0.0d0
+      if (dabs(stateM1%F2) .lt. negF_tol*Fbound2) then
+        stateM1%F2 = dabs(stateM1%F2)
       else
         stateM1%F2 = 0.0d0
         {^C& stateM1%F_low(^C) = 0.0d0 \}
@@ -512,7 +519,7 @@ contains
     Fmax2 = (fmaxfact*E1)*(fmaxfact*E1)
     Fmag  = dsqrt(max(stateM1%F2,0.0d0))
     ! safety margin on the upper bound Fmag/E <= fmaxfact
-    if (stateM1%F2 .gt. Fmax2) then
+    if (stateM1%F2 .gt. Fbound2*(1.0d0 + overF_tol)) then
       fac = dsqrt(Fmax2/max(stateM1%F2,M1_TINY))
       {^C& stateM1%F_low(^C) = fac*stateM1%F_low(^C) \}
       {^C& stateM1%F_up(^C) = fac*stateM1%F_up(^C) \}

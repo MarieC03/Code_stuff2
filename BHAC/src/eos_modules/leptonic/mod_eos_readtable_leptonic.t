@@ -11,6 +11,7 @@
 !    ymu_table           [nymu]                  ln(ymu)  (log scale!)
 !    eos_ymumin/max      scalar bounds
 !    eos_ylemin/max      scalar bounds
+!    mass_factor         optional baryon-mass metadata [g]
 !    electronic_eos_tables [nrho*ntemp*nyle * NUM_VARS_ELE]
 !    muonic_eos_tables     [nrho*ntemp*nymu * NUM_VARS_MUON]
 !
@@ -52,6 +53,10 @@ contains
     double precision, allocatable :: flat_muon(:)  ! nrho*ntemp*nymu*nvars_muon
     double precision, allocatable :: logrho_tmp(:), logtemp_tmp(:)
     double precision :: rho_axis_diff, temp_axis_diff
+    double precision :: rho_axis_shift, temp_axis_shift
+    double precision :: rho_axis_resid, temp_axis_resid
+    double precision :: leptonic_mass_factor, expected_rho_shift
+    logical :: dataset_there
 
     integer :: nrho_loc, ntemp_loc, nyle_loc, nymu_loc
     integer :: i, j, k, iv, indold, indnew
@@ -128,17 +133,59 @@ contains
     call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, lep_logymu_table,  dims1d, error)
     call h5dclose_f(dset_id, error)
 
+    leptonic_mass_factor = -1.0d0
+    call h5lexists_f(file_id, "mass_factor", dataset_there, error)
+    if (dataset_there) then
+      dims1(1) = 1
+      call h5dopen_f(file_id, "mass_factor", dset_id, error)
+      call h5dread_f(dset_id, H5T_NATIVE_DOUBLE, leptonic_mass_factor, dims1, error)
+      call h5dclose_f(dset_id, error)
+      if (mype == 0) write(*,'(a,es14.6)') "  leptonic mass_factor [g]: ", leptonic_mass_factor
+    end if
+
     if (.not. allocated(lep_logrho_table) .or. .not. allocated(lep_logtemp_table)) then
       call mpistop("mod_eos_readtable_leptonic: baryon axes must be loaded first")
     end if
     rho_axis_diff = maxval(abs(logrho_tmp - lep_logrho_table))
     temp_axis_diff = maxval(abs(logtemp_tmp - lep_logtemp_table))
+    rho_axis_shift = sum(logrho_tmp - lep_logrho_table) / dble(lep_nrho)
+    temp_axis_shift = sum(logtemp_tmp - lep_logtemp_table) / dble(lep_ntemp)
+    rho_axis_resid = maxval(abs((logrho_tmp - lep_logrho_table) - rho_axis_shift))
+    temp_axis_resid = maxval(abs((logtemp_tmp - lep_logtemp_table) - temp_axis_shift))
     if (rho_axis_diff > 1.0d-10) then
-      if (mype == 0) write(*,'(a,es14.6)') "  max |d log rho| = ", rho_axis_diff
+      expected_rho_shift = 0.0d0
+      if (leptonic_mass_factor > 0.0d0 .and. lep_baryon_mass > 0.0d0) then
+        expected_rho_shift = log(leptonic_mass_factor / lep_baryon_mass)
+      end if
+      if (trim(baryon_table_type) == 'compose' .and. rho_axis_resid <= 1.0d-10) then
+        if (mype == 0) then
+          write(*,'(a,es14.6)') "  applying constant compose rho-axis shift = ", rho_axis_shift
+          if (leptonic_mass_factor > 0.0d0 .and. lep_baryon_mass > 0.0d0) then
+            write(*,'(a,es14.6)') "  expected shift from leptonic mass_factor = ", expected_rho_shift
+          end if
+        end if
+        call align_compose_baryon_rho_axis(rho_axis_shift, leptonic_mass_factor)
+        rho_axis_diff = maxval(abs(logrho_tmp - lep_logrho_table))
+      end if
+    end if
+    if (rho_axis_diff > 1.0d-10) then
+      if (mype == 0) then
+        write(*,'(a,es14.6)') "  max |d log rho| = ", rho_axis_diff
+        write(*,'(a,es14.6)') "  mean rho-axis shift = ", rho_axis_shift
+        write(*,'(a,es14.6)') "  rho-axis residual after removing mean shift = ", rho_axis_resid
+        if (leptonic_mass_factor > 0.0d0 .and. lep_baryon_mass > 0.0d0) then
+          expected_rho_shift = log(leptonic_mass_factor / lep_baryon_mass)
+          write(*,'(a,es14.6)') "  expected shift from leptonic mass_factor = ", expected_rho_shift
+        end if
+      end if
       call mpistop("mod_eos_readtable_leptonic: rho axis mismatch")
     end if
     if (temp_axis_diff > 1.0d-10) then
-      if (mype == 0) write(*,'(a,es14.6)') "  max |d log temp| = ", temp_axis_diff
+      if (mype == 0) then
+        write(*,'(a,es14.6)') "  max |d log temp| = ", temp_axis_diff
+        write(*,'(a,es14.6)') "  mean temp-axis shift = ", temp_axis_shift
+        write(*,'(a,es14.6)') "  temp-axis residual after removing mean shift = ", temp_axis_resid
+      end if
       call mpistop("mod_eos_readtable_leptonic: temp axis mismatch")
     end if
 
@@ -217,5 +264,32 @@ contains
     end if
 
   end subroutine readtable_leptonic
+
+  subroutine align_compose_baryon_rho_axis(rho_axis_shift, leptonic_mass_factor)
+    use mod_eos_leptonic_parameters
+    implicit none
+
+    double precision, intent(in) :: rho_axis_shift, leptonic_mass_factor
+
+    integer :: i, j, k
+    double precision :: h_local
+
+    lep_logrho_table(:) = lep_logrho_table(:) + rho_axis_shift
+    if (leptonic_mass_factor > 0.0d0) lep_baryon_mass = leptonic_mass_factor
+
+    lep_eos_rhomin = exp(lep_logrho_table(1))
+    lep_eos_rhomax = exp(lep_logrho_table(lep_nrho))
+    lep_eos_hmin = huge(1.0d0)
+
+    do k = 1, lep_nye
+    do j = 1, lep_ntemp
+    do i = 1, lep_nrho
+      h_local = 1.0d0 + exp(lep_tables_baryon(i,j,k,i_lep_logenergy)) - lep_energy_shift + &
+           exp(lep_tables_baryon(i,j,k,i_lep_logpress)) / exp(lep_logrho_table(i))
+      lep_eos_hmin = min(lep_eos_hmin, h_local)
+    end do
+    end do
+    end do
+  end subroutine align_compose_baryon_rho_axis
 
 end module mod_eos_readtable_leptonic

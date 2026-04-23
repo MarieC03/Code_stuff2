@@ -55,6 +55,10 @@ contains
     double precision, allocatable :: zav_table(:,:,:), yav_table(:,:,:), aav_table(:,:,:)
     double precision, allocatable :: enthalpy(:,:,:)
     double precision :: eps_min_local, h_local, compose_baryon_mass
+    ! Keep the COMPOSE baryon-sector conversion aligned with the
+    ! Margherita/GRACE leptonic-table convention used by the split 4D EOS.
+    double precision, parameter :: lep_rho_gf   = 1.61887093132742d-18
+    double precision, parameter :: lep_press_gf = 1.80123683248503d-39
 
     accerr = 0
     if (mype == 0) write(*,*) "Reading baryon (compose) EOS table: ", trim(adjustl(eos_filename))
@@ -285,7 +289,7 @@ contains
     end if
 
     do i = 1, lep_nrho
-      lep_logrho_table(i) = log(nb_axis(i) * compose_baryon_mass * cm3_to_fm3 * rho_gf)
+      lep_logrho_table(i) = log(nb_axis(i) * compose_baryon_mass * cm3_to_fm3 * lep_rho_gf)
     end do
     do j = 1, lep_ntemp
       lep_logtemp_table(j) = log(temp_axis(j))
@@ -293,7 +297,7 @@ contains
     lep_ye_table(1:lep_nye) = yp_axis(1:lep_nye)
 
     lep_tables_baryon(:,:,:,i_lep_logpress) = log(lep_tables_baryon(:,:,:,i_lep_logpress) * &
-         Mev_to_erg * cm3_to_fm3 * press_gf)
+         Mev_to_erg * cm3_to_fm3 * lep_press_gf)
 
     lep_energy_shift = 0.0d0
     eps_min_local = minval(lep_tables_baryon(:,:,:,i_lep_logenergy))

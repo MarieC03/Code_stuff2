@@ -13,7 +13,7 @@ module mod_m1_collisional
   double precision :: qdt_impl
   double precision :: alp, sqrtg
   double precision :: Fmag, fac
-  double precision :: fmaxfact = 0.999d0 !0.99999d0 !0.999d0
+  double precision :: fmaxfact = 1.0d0 - 1.0d-8
   double precision, dimension(m1_num_eas) :: eas
   integer :: linearized_case
   
@@ -55,6 +55,7 @@ contains
     double precision :: dYE
     double precision :: T_eq, Ye_eq
     double precision :: m1_sources_func_global(m1_system_ndim)
+    double precision :: wrad_safe(1:m1_numvars_internal)
     integer :: iter, error
     integer :: i
     !------ for testing:
@@ -66,6 +67,8 @@ contains
      !linearized_case = 3   ! linearization around v_i = 0 and k_s active
      !linearized_case = 4   ! set coll_sources to some value
     !-------
+
+    sources(:) = 0.0d0
 
     ! Store variables needed for the iteration
     !Ut_explicit(1) = wrad(m1_energy_)
@@ -129,7 +132,8 @@ contains
     eas = eas_
     
     ! Compute initial guess for iteration
-    call get_iter_initguess(wrad)  
+    call get_iter_initguess(wrad)
+    wrad_safe(:) = wrad(:)
 
     m1_sources_func_global(:) = m1_sources_func(wrad)
     !--------------------------------------
@@ -147,14 +151,18 @@ contains
        if( (error == 2) .or. (error == 4) .or.(error == 5) ) then
         call multistart_rootfinding(m1_system_ndim, wrad, 1.0d-15, 150, &
         error, m1_sources_func,m1_sources_jacobian, m1_sources_min, get_random_start )
-         ! Use initial guess if iterative solution did not converge
-        if( error .ne. 0 ) then
-         call get_iter_initguess(wrad)
-        end if
        end if
-       
+       ! Use the precomputed safe implicit guess for any failed solve. Rebuilding
+       ! the guess here from stateM1 would reuse the last failed Newton iterate.
+       if( error .ne. 0 ) then
+         wrad(:) = wrad_safe(:)
+       end if
     end if
     !--------------------------------------
+
+    if (any(.not. ieee_is_finite(wrad(:))) .or. wrad(m1_energy_) <= 0.0d0) then
+      wrad(:) = wrad_safe(:)
+    end if
 
     ! fill state with updated wrad values
     stateM1%E = max(wrad(m1_energy_), m1_E_atmo)
@@ -192,15 +200,12 @@ contains
     ! update the closure to make sure everything is consistent
     call m1_update_closure_ixD(stateM1,metricM1,ix^D,.true.,get_vel_impl=.false.)
     
-    !!!!!!! TEST
-    if((stateM1%E - stateM1%Fv) < 0.0d0)then
-      write(888,*)"Aiaiaiai",ix^D, stateM1%E - stateM1%Fv
-      write(888,*)"E",stateM1%E 
-      write(888,*)"E",stateM1%Fv
-      write(*,*)"Aiaiaiai",ix^D, stateM1%E - stateM1%Fv
-      write(*,*)"E",stateM1%E 
-      write(*,*)"E",stateM1%Fv
-    end if 
+    if (((stateM1%E - stateM1%Fv) < 0.0d0) .or. (.not. ieee_is_finite(stateM1%E - stateM1%Fv))) then
+      wrad(:) = wrad_safe(:)
+      stateM1%E = max(wrad(m1_energy_), m1_E_atmo)
+      {^C& stateM1%F_low(^C) = wrad(m1_flux^C_) \}
+      call m1_update_closure_ixD(stateM1,metricM1,ix^D,.true.,get_vel_impl=.false.)
+    end if
 
     ! fill wrad with updated state values 
     wrad(m1_energy_) = stateM1%E
@@ -215,7 +220,7 @@ contains
       sources(1:m1_system_ndim) = m1_collisional_sources(wrad)
     end if 
     ! status: moved alpha out of collisional_sources-function
-    sources = sources*sqrtg*alp
+    sources(1:m1_system_ndim) = sources(1:m1_system_ndim)*sqrtg*alp
 
     wrad(m1_energy_) = wrad(m1_energy_)*sqrtg
     {^C& wrad(m1_flux^C_) = wrad(m1_flux^C_)*sqrtg \}
@@ -686,12 +691,14 @@ end subroutine m1_get_implicit_collisional_sources
     double precision, intent(inout) :: z_vec(1:m1_system_ndim)
     ! internal
     double precision :: Hn
-    double precision :: W2
+    double precision :: W2, Wsafe, qdt_source
 
     W2 = stateM1%W * stateM1%W
+    Wsafe = max(stateM1%W, 1.0d0)
+    qdt_source = alp*qdt_impl
         
-    stateM1%J = (stateM1%J + qdt_impl/stateM1%W*eas(Q_ems) ) / ( 1.0d0 + eas(k_a)*qdt_impl/stateM1%W )
-    {^C& stateM1%H_low(^C) = stateM1%H_low(^C)/(1.0d0 + qdt_impl/stateM1%W*(eas(k_a)+eas(k_s)) ) \}
+    stateM1%J = (stateM1%J + qdt_source/Wsafe*eas(Q_ems) ) / ( 1.0d0 + eas(k_a)*qdt_source/Wsafe )
+    {^C& stateM1%H_low(^C) = stateM1%H_low(^C)/(1.0d0 + qdt_source/Wsafe*(eas(k_a)+eas(k_s)) ) \}
 
     Hn = {^C& stateM1%vel(^C)*stateM1%H_low(^C)+}
     Hn = -1.0d0 * Hn 
@@ -709,24 +716,38 @@ end subroutine m1_get_implicit_collisional_sources
   ! implicit update of number density!
   subroutine m1_get_implicit_n_source(N, dYE)
     use mod_m1_eas, only: k_n, Q_ems_n
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     {#IFNDEF UNIT_TESTS
     include "amrvacdef.f"
     }
     double precision, intent(inout) :: N
     double precision, intent(out) :: dYE
     !internal
-    double precision :: n_prim
+    double precision :: n_prim, gamma_safe, denom_n, sqrtg_safe
     !Note! Q_ems_n : Q_ems for number density
     !Note! k_n : kappa for number density
 
-    N = ( N + qdt_impl*alp*sqrtg*eas(Q_ems_n) )/ ( 1.0d0 + alp*qdt_impl*eas(k_n)/stateM1%Gamma) 
-    !N = max(N,m1_E_atmo) 
-    !n_prim = N / stateM1%Gamma / sqrtg
-    n_prim = max((N/sqrtg), m1_N_atmo)
-    N = n_prim * sqrtg
-    n_prim = n_prim / stateM1%Gamma
+    gamma_safe = stateM1%Gamma
+    if ((.not. ieee_is_finite(gamma_safe)) .or. (gamma_safe <= 1.0d-30)) gamma_safe = 1.0d0
+
+    sqrtg_safe = sqrtg
+    if ((.not. ieee_is_finite(sqrtg_safe)) .or. (sqrtg_safe <= 1.0d-30)) sqrtg_safe = 1.0d0
+
+    denom_n = 1.0d0 + alp*qdt_impl*eas(k_n)/gamma_safe
+    if ((.not. ieee_is_finite(denom_n)) .or. (denom_n <= 1.0d-30)) denom_n = 1.0d0
+
+    N = ( N + alp*qdt_impl*sqrtg_safe*eas(Q_ems_n) ) / denom_n
+    if (.not. ieee_is_finite(N)) N = gamma_safe*sqrtg_safe*m1_N_atmo
+
+    ! N is densitized Eulerian number density: N = Gamma * n_prim * sqrtg.
+    ! Floor the comoving primitive n_prim, then rebuild N consistently.
+    n_prim = N / (gamma_safe*sqrtg_safe)
+    if (.not. ieee_is_finite(n_prim)) n_prim = m1_N_atmo
+    n_prim = max(n_prim, m1_N_atmo)
+    N = n_prim * gamma_safe * sqrtg_safe
 
     dYE  = (eas(Q_ems_n) - eas(k_n)*n_prim )
+    if (.not. ieee_is_finite(dYE)) dYE = 0.0d0
 
   end subroutine m1_get_implicit_n_source
   

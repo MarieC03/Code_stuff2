@@ -986,13 +986,15 @@ istep=istep+1
 
 do_fluxfix = ((time_advance.and.levmax>levmin) .and. (istep==nstep.or.nstep>2))
 
-if (istep > 1) then  !last time already has the final getbc
-   do iigrid=1,igridstail_active; igrid=igrids_active(iigrid);
-      call set_tmpGlobals(igrid)
-      call primitive(ixG^LL,ixM^LL,psa(igrid)%w%w(ixG^T,1:nw),px(igrid)%x(ixG^T,1:ndim))
-   end do
-   call getbc(qt,psa,psCoarse)
-endif
+! A stage state may have just been modified by an implicit/source update, which
+! changes the conservatives but leaves the primitive slots stale. Refresh the
+! primitives before every explicit substep so fluxes/rates never use an
+! inconsistent (tau, s_i, T_eps, rho, u^i, ...) combination.
+do iigrid=1,igridstail_active; igrid=igrids_active(iigrid);
+   call set_tmpGlobals(igrid)
+   call primitive(ixG^LL,ixM^LL,psa(igrid)%w%w(ixG^T,1:nw),px(igrid)%x(ixG^T,1:ndim))
+end do
+call getbc(qt,psa,psCoarse)
 
 if (do_fluxfix) call init_comm_fix_conserve(idim^LIM)
 
@@ -1455,10 +1457,10 @@ end subroutine m1_wradimpl_tau
     ! We probably need, since the c2p
     !-----------------------------
       {#IFDEF M1
-      calc_equilib_rates = psm1impl(1)%calc_eqrates !psm1impl(igrid)%calc_eqrates
       !if(psm1impl%calc_rates .eqv. .true.) then
        ! grid loop 
        do iigrid=1,igridstail; igrid=igrids(iigrid);
+         calc_equilib_rates = psm1impl(igrid)%calc_eqrates
          !> fill in psm1 with rates:
          call m1_add_eas(qdt,qt,igrid,px(igrid)%x(ixG^T,1:ndim),psb(igrid)%w%w,psm1impl(igrid)%pwrad%wradimpl,ixG^LL,calc_equilib_rates)
         

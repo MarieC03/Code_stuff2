@@ -598,6 +598,7 @@ contains
 
    subroutine get_Riemann_flux_tvdlf()
    double precision  :: tvdlfeps_tmp =0.5
+   double precision, dimension(ixI^S) :: alpha_lf
      
      do iw=1, ncons
        if (transport(iw)) then
@@ -611,7 +612,8 @@ contains
        ! Mean flux:
        fadd(ixC^S)=half*(fadd(ixC^S)+fdiss(ixC^S))
        ! Add TVDLF dissipation:
-       fdiss(ixC^S)=-tvdlfeps*cmaxC(ixC^S,iw)*half*(wRC(ixC^S,iw)-wLC(ixC^S,iw))
+       alpha_lf(ixC^S)=max(dabs(cmaxC(ixC^S,iw)), dabs(cminC(ixC^S,iw)))
+       fdiss(ixC^S)=-tvdlfeps*alpha_lf(ixC^S)*half*(wRC(ixC^S,iw)-wLC(ixC^S,iw))
        ! fLC contains physical+dissipative fluxes
        fC(ixC^S,iw,idims)=fadd(ixC^S)+fdiss(ixC^S)
      enddo
@@ -630,26 +632,36 @@ contains
    subroutine get_Riemann_flux_hll()
        integer :: ix^D
      double precision  :: tvdlfeps_tmp =0.5
-     do iw=1, ncons
-       if (transport(iw)) then
+     double precision :: denom_hll, alpha_hll
+      do iw=1, ncons
+        if (transport(iw)) then
           fLC(ixC^S,iw)  = fLC(ixC^S,iw)+vLC(ixC^S)*wLC(ixC^S,iw)
           fRC(ixC^S,iw)  = fRC(ixC^S,iw)+vRC(ixC^S)*wRC(ixC^S,iw)
        else
        end if
 
        {do ix^DB=ixCmin^DB,ixCmax^DB\}
-         if(cminC(ix^D,iw) >= 0.0d0) then
-           fC(ix^D,iw,idims)=fLC(ix^D,iw)
-         else if(cmaxC(ix^D,iw) <= 0.0d0) then
-           fC(ix^D,iw,idims)=fRC(ix^D,iw)
-         else
-           ! Add hll dissipation to the flux
-           fC(ix^D,iw,idims)=(cmaxC(ix^D,iw)*fLC(ix^D,iw)-cminC(ix^D,iw)*fRC(ix^D,iw)&
-                 +tvdlfeps*cminC(ix^D,iw)&
-                  *cmaxC(ix^D,iw)*(wRC(ix^D,iw)-wLC(ix^D,iw)))&
-                 /(cmaxC(ix^D,iw)-cminC(ix^D,iw))
-         end if
-       {end do\}
+          if(cminC(ix^D,iw) >= 0.0d0) then
+            fC(ix^D,iw,idims)=fLC(ix^D,iw)
+          else if(cmaxC(ix^D,iw) <= 0.0d0) then
+            fC(ix^D,iw,idims)=fRC(ix^D,iw)
+          else
+            denom_hll = cmaxC(ix^D,iw)-cminC(ix^D,iw)
+            if (dabs(denom_hll) <= 1.0d-30) then
+              alpha_hll = max(dabs(cminC(ix^D,iw)), dabs(cmaxC(ix^D,iw)))
+              fC(ix^D,iw,idims) = 0.5d0*(fLC(ix^D,iw)+fRC(ix^D,iw)) - &
+                   0.5d0*tvdlfeps*alpha_hll*(wRC(ix^D,iw)-wLC(ix^D,iw))
+            else
+              ! Add hll dissipation to the flux
+              fC(ix^D,iw,idims)=(cmaxC(ix^D,iw)*fLC(ix^D,iw)-cminC(ix^D,iw)*fRC(ix^D,iw)&
+                    +tvdlfeps*cminC(ix^D,iw)&
+                     *cmaxC(ix^D,iw)*(wRC(ix^D,iw)-wLC(ix^D,iw)))&
+                    /denom_hll
+            end if
+          end if
+        {end do\}
+
+      enddo
 
             ! m1: correct fluxes form hll for diffusive lim
        !{#IFDEF M1 
@@ -660,7 +672,6 @@ contains
        {#IFDEF M1
          call m1_correct_asymptotic_fluxes(ixI^L,ixC^L,tvdlfeps,dxdim,idims, wLC, wRC, fC, fLC, fRC, cminC, cmaxC, wradimpl, qtC) 
        }
-      enddo
 
    end subroutine get_Riemann_flux_hll
 
