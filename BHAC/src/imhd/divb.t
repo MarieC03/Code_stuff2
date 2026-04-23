@@ -36,11 +36,12 @@ subroutine addsource_glmb(qdt,ixI^L,ixO^L,iw^LIM,qtC,wCT,qt,w,x,dx^D)
   double precision, intent(in) :: qdt, qtC, qt, wCT(ixI^S,1:nw), x(ixI^S,1:ndim)
   double precision, intent(in) :: dx^D
   double precision, intent(inout) :: w(ixI^S,1:nw)
+  double precision :: cp_damp
   !-----------------------------------------------------------------------------
 
   ! implicit update of psi variable
-  !w(ixO^S,psi_) = exp(-qdt*cmax_global/eqpar(Cr_))*w(ixO^S,psi_)
-  w(ixO^S,psi_) = exp(-eqpar(Cr_))*w(ixO^S,psi_)
+  cp_damp = max(eqpar(Cr_), 1.0d-30)
+  w(ixO^S,psi_) = exp(-qdt*cmax_global/cp_damp)*w(ixO^S,psi_)
 
 end subroutine addsource_glmb
 !=============================================================================
